@@ -14,7 +14,8 @@
 ブラウザで開くと、それぞれ JSON / 対話的なドキュメント画面が表示されます。
  
 <!-- スクリーンショットは後で docs/screenshot.png を追加してここに挿入 -->
- 
+<img width="1872" height="909" alt="api-swagger" src="https://github.com/user-attachments/assets/374fa421-4e02-496e-a7af-65288a9a70fc" />
+
 ---
  
 ## 概要
