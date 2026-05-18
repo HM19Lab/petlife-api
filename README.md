@@ -11,6 +11,7 @@
 - **API ルート（ヘルスチェック）**: <https://web-production-3267c.up.railway.app/>
 - **全在庫データ**: <https://web-production-3267c.up.railway.app/stock>
 - **Swagger UI（自動生成された API ドキュメント）**: <https://web-production-3267c.up.railway.app/docs>
+
 ブラウザで開くと、それぞれ JSON / 対話的なドキュメント画面が表示されます。
  
 <!-- スクリーンショットは後で docs/screenshot.png を追加してここに挿入 -->
