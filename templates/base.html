@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+{#
+  共通レイアウト（土台）テンプレート
+  ============================================
+  各ページは {% extends "base.html" %} でこのファイルを継承して、
+  {% block %} 部分だけを差し替える。
+
+  CSS は static/style.css に外出し済み。
+#}
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>{% block title %}在庫管理{% endblock %}</title>
+
+    {# 外出しした CSS を読み込む。URL の /static/... は main.py の app.mount() で
+       static/ フォルダにマッピングされている。 #}
+    <link rel="stylesheet" href="/static/style.css">
+
+    {# HTMX 本体。これだけで hx-* 属性が有効になる。 #}
+    <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+
+    {# ページ固有の追加スタイル/スクリプトが必要なときの差し込み口 #}
+    {% block extra_head %}{% endblock %}
+</head>
+<body>
+    {% block content %}{% endblock %}
+</body>
+</html>

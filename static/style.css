@@ -1,0 +1,187 @@
+/* =================================================================
+   petlife-api 在庫管理画面 共通スタイル
+   ----------------------------------------------------------------
+   外出しした CSS。base.html から <link rel="stylesheet"> で読み込む。
+   ================================================================= */
+
+/* ============================================
+   ベース
+   ============================================ */
+* { box-sizing: border-box; }
+body {
+    font-family: -apple-system, "Segoe UI", "Hiragino Sans",
+                 "Yu Gothic UI", sans-serif;
+    margin: 0;
+    padding: 0;
+    background: #f7f7f7;
+    color: #333;
+    /* 画面全体を縦flexで「ヘッダー固定 + 残りでスクロール」を作る */
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+}
+
+/* ============================================
+   ヘッダー・検索バー（固定領域）
+   ============================================ */
+header {
+    padding: 16px 24px;
+    background: white;
+    border-bottom: 1px solid #e0e0e0;
+}
+header h1 {
+    margin: 0 0 12px 0;
+    font-size: 20px;
+}
+
+/* 検索フォームを横並びにする */
+.search-form {
+    display: flex;
+    gap: 12px;
+    align-items: flex-end;
+    flex-wrap: wrap;
+}
+.form-group {
+    display: flex;
+    flex-direction: column;
+}
+.form-group label {
+    font-size: 12px;
+    color: #666;
+    margin-bottom: 4px;
+}
+.form-group input,
+.form-group select {
+    padding: 8px 10px;
+    font-size: 14px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    min-width: 140px;
+}
+
+/* チェックボックス用（「要発注のみ」表示切り替え） */
+.form-group-check {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding-bottom: 8px;
+}
+.form-group-check label {
+    font-size: 13px;
+    color: #333;
+    cursor: pointer;
+}
+
+/* ボタン */
+.btn {
+    padding: 10px 20px;
+    font-size: 14px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: bold;
+    text-decoration: none;
+    display: inline-block;
+}
+.btn-primary {
+    background: #1976d2;
+    color: white;
+}
+.btn-primary:hover { background: #1565c0; }
+.btn-secondary {
+    background: white;
+    color: #555;
+    border: 1px solid #ccc;
+}
+.btn-secondary:hover { background: #f0f0f0; }
+
+/* ============================================
+   テーブル領域（ここだけスクロール）
+   ============================================ */
+.table-wrapper {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0 24px 16px 24px;
+    scrollbar-gutter: stable;
+}
+table {
+    width: 1100px;
+    table-layout: fixed;
+    border-collapse: collapse;
+    background: white;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+}
+thead {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+thead th {
+    background: #455a64;
+    color: white;
+    text-align: center;
+    padding: 10px 12px;
+    font-size: 13px;
+    font-weight: bold;
+    border: 1px solid #37474f;
+    /* sticky + border-collapse の落とし穴対策（htmx-search で学んだやつ） */
+    border-bottom: none;
+    border-top: none;
+}
+tbody td {
+    padding: 8px 12px;
+    font-size: 14px;
+    border: 1px solid #d0d0d0;
+}
+tbody tr:hover td {
+    background: #e3f2fd;
+}
+
+/* 数値列は右寄せ（thead は中央寄せのまま、tbody だけ右寄せ） */
+tbody td.num { text-align: right; }
+
+/* 要発注フラグ列 */
+tbody td.flag { text-align: center; }
+
+/* ============================================
+   要発注の強調表示（ステップC）
+   ============================================
+   _rows.html で、要発注の <tr> に class="row-low" を付ける。
+   行全体をうっすら赤で塗って、フラグセルは太字赤に。 */
+tbody tr.row-low td {
+    background: #fff0f0;
+}
+tbody tr.row-low:hover td {
+    background: #ffe0e0;
+}
+tbody tr.row-low td.flag {
+    color: #d32f2f;
+    font-weight: bold;
+}
+
+/* 結果0件のときのメッセージ */
+.empty {
+    padding: 24px;
+    text-align: center;
+    color: #999;
+}
+
+/* ============================================
+   ローディング表示（ステップB）
+   ============================================
+   HTMX のお約束:
+     普段は .htmx-indicator が opacity:0 で透明
+     リクエスト中は HTMX が起点要素に .htmx-request クラスを付ける
+     → .htmx-request .htmx-indicator が opacity:1 になって出てくる */
+.htmx-indicator {
+    opacity: 0;
+    transition: opacity 200ms ease-in;
+    color: #666;
+    font-size: 13px;
+    margin-left: 8px;
+    align-self: center;
+}
+.htmx-request .htmx-indicator,
+.htmx-request.htmx-indicator {
+    opacity: 1;
+}

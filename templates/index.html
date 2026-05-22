@@ -1,0 +1,99 @@
+{#
+  在庫一覧ページ
+  ============================================
+  base.html を継承して、タイトルと中身だけを差し替える。
+#}
+{% extends "base.html" %}
+
+{% block title %}在庫一覧 - サンプルペッツライフ{% endblock %}
+
+{% block content %}
+
+    <header>
+        <h1>サンプルペッツライフ 在庫一覧</h1>
+
+        {#
+          検索フォーム
+          ============================================
+          hx-get="/ui/rows"  … フォーム内の値をクエリパラメータにして /ui/rows を叩く
+          hx-target="#rows"  … 返ってきたHTMLを <tbody id="rows"> の中身に差し込む
+          hx-swap="innerHTML"… 差し込み方は中身を置き換え（デフォルト）
+          hx-trigger="..."   … 入力中(300msのdebounce付き) / select 変更 / submit ボタンで発火
+          hx-indicator       … リクエスト中だけ「検索中…」を表示する要素のセレクタ
+        #}
+        <form class="search-form"
+              hx-get="/ui/rows"
+              hx-target="#rows"
+              hx-swap="innerHTML"
+              hx-trigger="input changed delay:300ms, change, submit"
+              hx-indicator="#loading">
+
+            <div class="form-group">
+                <label for="category">カテゴリ</label>
+                <select id="category" name="category">
+                    <option value="">(すべて)</option>
+                    {% for c in categories %}
+                        <option value="{{ c }}">{{ c }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="keyword">キーワード</label>
+                <input type="text" id="keyword" name="keyword"
+                       placeholder="SKU/商品名/保管場所">
+            </div>
+
+            <div class="form-group-check">
+                {# checkbox は value="true" を明示。チェック時のみクエリに含まれる。
+                   FastAPI 側の `low_only: bool = False` が "true" を True に解釈する。 #}
+                <input type="checkbox" id="low_only" name="low_only" value="true">
+                <label for="low_only">要発注のみ</label>
+            </div>
+
+            <button type="submit" class="btn btn-primary">検索</button>
+            <a href="/" class="btn btn-secondary">クリア</a>
+
+            <span id="loading" class="htmx-indicator">検索中…</span>
+        </form>
+    </header>
+
+    {#
+      テーブル領域
+      ============================================
+      <thead> は固定。<tbody id="rows"> の中身が /ui/rows の結果で差し替わる。
+      初期表示はサーバー側で全件を _rows.html に流し込んで include する。
+    #}
+    <div class="table-wrapper">
+        <table>
+            {# 列幅を colgroup で固定。table-layout: fixed と組み合わせる #}
+            <colgroup>
+                <col style="width:  90px"> {# SKU       #}
+                <col style="width: 320px"> {# 商品名    #}
+                <col style="width: 140px"> {# カテゴリ  #}
+                <col style="width: 110px"> {# 保管場所  #}
+                <col style="width:  90px"> {# 現在庫数  #}
+                <col style="width:  80px"> {# 発注点    #}
+                <col style="width: 130px"> {# 消費期限  #}
+                <col style="width: 100px"> {# 要発注    #}
+            </colgroup>
+            <thead>
+                <tr>
+                    <th>SKU</th>
+                    <th>商品名</th>
+                    <th>カテゴリ</th>
+                    <th>保管場所</th>
+                    <th class="num">現在庫数</th>
+                    <th class="num">発注点</th>
+                    <th>消費期限</th>
+                    <th>要発注</th>
+                </tr>
+            </thead>
+            <tbody id="rows">
+                {# 初期表示: _rows.html を読み込んで全件を出す #}
+                {% include "_rows.html" %}
+            </tbody>
+        </table>
+    </div>
+
+{% endblock %}
