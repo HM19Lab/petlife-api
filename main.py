@@ -1,24 +1,29 @@
 """
-サンプルペッツライフ 在庫管理API + 在庫管理画面
+サンプルペッツライフ 在庫管理API + 在庫管理画面 + ダッシュボード
 
 【エンドポイント】
   [HTML UI（HTMX）]
-  GET  /              → 在庫一覧画面（HTML）
-  GET  /ui/rows       → 検索結果の部分HTML（HTMX用）
+  GET  /                        → ダッシュボード画面（KPI + Chart.js グラフ）
+  GET  /inventory               → 在庫一覧画面（HTML、旧 /）
+  GET  /ui/rows                 → 検索結果の部分HTML（HTMX用）
+  GET  /ui/stock/{sku}/edit_qty → 編集モードのセル（HTMX用）
+  PUT  /ui/stock/{sku}/qty      → 在庫数更新＋行HTML返却（HTMX用）
 
-  [JSON API]
-  GET  /health        → ヘルスチェック（旧 / から移動）
+  [JSON API]（petlife-streamlit 互換のため変更なし）
+  GET  /health        → ヘルスチェック
   GET  /stock         → 全在庫データ取得（JSON）
   GET  /stock/{sku}   → 1商品取得（JSON）
-  PUT  /stock/{sku}   → 在庫数更新
+  PUT  /stock/{sku}   → 在庫数更新（JSON）
 
 【データ】
   stock.csv をメモリ上の DataFrame で管理（デモ用・再起動で初期値に戻る）
 """
 
+from datetime import date
+import calendar
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, Form, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
@@ -84,6 +89,35 @@ def get_all_stocks() -> list[dict]:
     return _df.fillna("").to_dict(orient="records")
 
 
+def update_qty_in_df(sku_code: str, qty: int) -> dict:
+    """指定SKUの現在庫数を更新し、最新の1件(dict)を返す。
+
+    在庫数を変えると 要発注 フラグ（現在庫数 < 発注点）も連動して切り替わるため、
+    更新→フラグ再計算 をここで一括で行う。
+    JSON版PUTと HTMX版PUT の両方から呼ぶ共通処理。
+    """
+    global _df
+    if _df[_df["SKUコード"] == sku_code].empty:
+        raise HTTPException(
+            status_code=404,
+            detail=f"SKUコード '{sku_code}' が見つかりません",
+        )
+    _df.loc[_df["SKUコード"] == sku_code, "現在庫数"] = qty
+    _df["要発注"] = _df["現在庫数"] < _df["発注点"]
+    return _df[_df["SKUコード"] == sku_code].fillna("").to_dict(orient="records")[0]
+
+
+def get_stock_or_404(sku_code: str) -> dict:
+    """1件取得。なければ404。テンプレート用のdictを返す。"""
+    row = _df[_df["SKUコード"] == sku_code]
+    if row.empty:
+        raise HTTPException(
+            status_code=404,
+            detail=f"SKUコード '{sku_code}' が見つかりません",
+        )
+    return row.fillna("").to_dict(orient="records")[0]
+
+
 def filter_stocks(category: str, keyword: str, low_only: bool) -> list[dict]:
     """検索条件で在庫を絞り込む
 
@@ -113,6 +147,84 @@ def filter_stocks(category: str, keyword: str, low_only: bool) -> list[dict]:
 
 
 # =============================================================
+# ダッシュボード用 集計関数
+# =============================================================
+# トップページ「/」のダッシュボードで使う4つのKPIと
+# Chart.js 用のグラフデータ（カテゴリ別/保管場所別）を集計する。
+# pandas の groupby / 日付フィルタ を使って DataFrame から直接計算する。
+
+def _end_of_month(today: date) -> date:
+    """当月末の日付を返す。例: 2026-05-24 → 2026-05-31
+
+    calendar.monthrange(年, 月) は (月の初日の曜日, その月の日数) を返す。
+    [1] で日数だけ取り出して、その日付を組み立てる。
+    """
+    last_day = calendar.monthrange(today.year, today.month)[1]
+    return date(today.year, today.month, last_day)
+
+
+def get_dashboard_stats(today: date | None = None) -> dict:
+    """ダッシュボード用KPI 4枚分の数値を返す
+
+    返り値の dict のキー:
+      - total:      総商品数
+      - low:        要発注数（現在庫数 < 発注点）
+      - expiring:   当月末までに消費期限が来る商品数
+      - categories: カテゴリ数（DISTINCT）
+      - today_iso:  今日の日付（テンプレート表示用、ISO形式）
+      - eom_iso:    当月末の日付（テンプレート表示用、ISO形式）
+
+    today を引数で渡せるようにしておくと、テストや「過去日付で動作確認」がしやすい。
+    渡さなければ date.today() を使う。
+    """
+    today = today or date.today()
+    eom = _end_of_month(today)
+
+    total = len(_df)
+    low = int(_df["要発注"].sum())
+
+    # 消費期限を日付型に変換。空文字や不正値は NaT（pandas の Not a Time）になり、
+    # 比較演算で False になるので自然に除外される。
+    exp = pd.to_datetime(_df["消費期限"], errors="coerce")
+    today_ts = pd.Timestamp(today)
+    eom_ts = pd.Timestamp(eom)
+    expiring = int(((exp >= today_ts) & (exp <= eom_ts)).sum())
+
+    categories = int(_df["カテゴリ"].nunique())
+    total_qty = int(_df["現在庫数"].sum())
+
+    return {
+        "total": total,
+        "low": low,
+        "expiring": expiring,
+        "categories": categories,
+        "total_qty": total_qty,
+        "today_iso": today.isoformat(),
+        "eom_iso": eom.isoformat(),
+    }
+
+
+def get_category_counts() -> list[dict]:
+    """カテゴリ別の商品数を集計（Chart.js の棒グラフ用）
+
+    返り値の例: [{"label": "ドライフード", "count": 5}, ...]
+    商品数が多い順に並べる（降順ソート）。
+    """
+    counts = _df.groupby("カテゴリ").size().sort_values(ascending=False)
+    return [{"label": k, "count": int(v)} for k, v in counts.items()]
+
+
+def get_location_counts() -> list[dict]:
+    """保管場所別の商品数を集計（Chart.js の棒グラフ用）
+
+    返り値の例: [{"label": "店舗A棚", "count": 7}, ...]
+    商品数が多い順に並べる（降順ソート）。
+    """
+    counts = _df.groupby("保管場所").size().sort_values(ascending=False)
+    return [{"label": k, "count": int(v)} for k, v in counts.items()]
+
+
+# =============================================================
 # リクエストモデル
 # =============================================================
 class StockUpdateRequest(BaseModel):
@@ -122,15 +234,34 @@ class StockUpdateRequest(BaseModel):
 # =============================================================
 # [HTML UI] エンドポイント
 # =============================================================
-@app.get("/", response_class=HTMLResponse, summary="在庫一覧画面（HTML）")
-def index(request: Request):
-    """トップページ: 検索フォーム + 全件テーブルを含む完全なHTMLを返す"""
+@app.get("/", response_class=HTMLResponse, summary="ダッシュボード画面（HTML）")
+def dashboard(request: Request):
+    """トップページ: KPIカード4枚 + Chart.js の棒グラフ2本
+
+    集計関数で計算した数値を context に詰めて dashboard.html に渡す。
+    Chart.js 用のグラフデータは Jinja2 の |tojson フィルタで JS 側に渡す。
+    """
+    stats = get_dashboard_stats()
+    return templates.TemplateResponse(
+        request=request,
+        name="dashboard.html",
+        context={
+            "stats": stats,
+            "category_data": get_category_counts(),
+            "location_data": get_location_counts(),
+        },
+    )
+
+
+@app.get("/inventory", response_class=HTMLResponse, summary="在庫一覧画面（HTML）")
+def inventory(request: Request):
+    """在庫一覧ページ: 検索フォーム + 全件テーブルを含む完全なHTMLを返す（旧 /）"""
     stocks = get_all_stocks()
     # カテゴリのドロップダウン用リスト（DISTINCT + ソート）
     categories = sorted(set(item["カテゴリ"] for item in stocks))
     return templates.TemplateResponse(
         request=request,
-        name="index.html",
+        name="inventory.html",
         context={"stocks": stocks, "categories": categories},
     )
 
@@ -173,25 +304,63 @@ def get_all_stock():
 @app.get("/stock/{sku_code}", summary="1商品の在庫データ取得（JSON）")
 def get_stock_item(sku_code: str):
     """SKUコードを指定して1商品のデータを返す"""
-    row = _df[_df["SKUコード"] == sku_code]
-    if row.empty:
-        raise HTTPException(
-            status_code=404,
-            detail=f"SKUコード '{sku_code}' が見つかりません",
-        )
-    return row.fillna("").to_dict(orient="records")[0]
+    return get_stock_or_404(sku_code)
 
 
-@app.put("/stock/{sku_code}", summary="在庫数更新")
+@app.put("/stock/{sku_code}", summary="在庫数更新（JSON、petlife-streamlit 互換）")
 def update_stock_quantity(sku_code: str, body: StockUpdateRequest):
-    """指定SKUの現在庫数を更新する"""
-    global _df
-    if _df[_df["SKUコード"] == sku_code].empty:
-        raise HTTPException(
-            status_code=404,
-            detail=f"SKUコード '{sku_code}' が見つかりません",
-        )
-    _df.loc[_df["SKUコード"] == sku_code, "現在庫数"] = body.現在庫数
-    _df["要発注"] = _df["現在庫数"] < _df["発注点"]
-    updated = _df[_df["SKUコード"] == sku_code].fillna("").to_dict(orient="records")[0]
+    """指定SKUの現在庫数を更新する（JSONバージョン）"""
+    updated = update_qty_in_df(sku_code, body.現在庫数)
     return {"message": "更新しました", "data": updated}
+
+
+# =============================================================
+# [HTML UI] インライン編集用エンドポイント（ステップD）
+# =============================================================
+# 「現在庫数」セルのインライン編集を実現する2エンドポイント。
+#   GET /ui/stock/{sku}/edit_qty … 通常セル → 編集セルに差し替え
+#   PUT /ui/stock/{sku}/qty      … 在庫数を更新して 行全体 を返す
+#
+# 在庫数が変わると 要発注 フラグ（行全体の色 + フラグ列）も連動して変わるため、
+# PUT のレスポンスは 1セルではなく 行全体 (_row.html) を返す方が確実。
+#
+# 既存 JSON 版 PUT /stock/{sku} は petlife-streamlit から呼ばれているので変更しない。
+# HTMX 用は /ui/stock/... に名前空間を分けて互換性を守る。
+
+@app.get(
+    "/ui/stock/{sku_code}/edit_qty",
+    response_class=HTMLResponse,
+    summary="編集モードのセルHTMLを返す（HTMX用）",
+)
+def ui_edit_qty(request: Request, sku_code: str):
+    """通常セル <td>12</td> を 編集セル <td><input ...></td> に差し替えるための部分HTML"""
+    stock = get_stock_or_404(sku_code)
+    return templates.TemplateResponse(
+        request=request,
+        name="_qty_edit_cell.html",
+        context={"s": stock},
+    )
+
+
+@app.put(
+    "/ui/stock/{sku_code}/qty",
+    response_class=HTMLResponse,
+    summary="在庫数を更新して行HTMLを返す（HTMX用）",
+)
+def ui_update_qty(
+    request: Request,
+    sku_code: str,
+    qty: int = Form(...),
+):
+    """HTMX のフォーム送信を受けて、在庫数を更新 → 行全体(<tr>)を返す。
+
+    入力バリデーション: 0 未満は 400 で弾く（HTMX は 4xx を受け取るとデフォルトで何もしない）。
+    """
+    if qty < 0:
+        raise HTTPException(status_code=400, detail="在庫数は0以上で指定してください")
+    updated = update_qty_in_df(sku_code, qty)
+    return templates.TemplateResponse(
+        request=request,
+        name="_row.html",
+        context={"s": updated},
+    )

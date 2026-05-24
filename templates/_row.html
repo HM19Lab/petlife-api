@@ -1,0 +1,31 @@
+{#
+  在庫テーブルの 1行 (<tr>) を出力する部分テンプレート
+  ============================================
+  - 初期表示・検索結果（_rows.html）からは {% for s in stocks %}{% include "_row.html" %}{% endfor %} で呼ばれる
+  - インライン編集の PUT /ui/stock/{sku}/qty のレスポンスでも、この 1行 を返して
+    HTMX が 「closest tr の outerHTML」を差し替える
+
+  ★ 現在庫数のセルは hx-get で 編集モード（<input>）に差し替わる仕掛け付き。
+     hx-target="this"  … クリックされたセル自身を置き換える
+     hx-swap="outerHTML" … <td> ごと差し替える
+     hx-trigger="click"  … クリックで発火
+#}
+<tr {% if s["要発注"] %}class="row-low"{% endif %}>
+    <td>{{ s["SKUコード"] }}</td>
+    <td>{{ s["商品名"] }}</td>
+    <td>{{ s["カテゴリ"] }}</td>
+    <td>{{ s["保管場所"] }}</td>
+    <td class="num qty-cell"
+        hx-get="/ui/stock/{{ s['SKUコード'] }}/edit_qty"
+        hx-target="this"
+        hx-swap="outerHTML"
+        hx-trigger="click"
+        title="クリックして編集">
+        {{ s["現在庫数"] }}
+    </td>
+    <td class="num">{{ s["発注点"] }}</td>
+    <td>{{ s["消費期限"] }}</td>
+    <td class="flag">
+        {% if s["要発注"] %}要発注{% else %}-{% endif %}
+    </td>
+</tr>

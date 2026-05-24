@@ -2,3 +2,4 @@ fastapi
 uvicorn[standard]
 pandas
 jinja2
+python-multipart

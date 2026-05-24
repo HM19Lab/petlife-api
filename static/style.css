@@ -185,3 +185,165 @@ tbody tr.row-low td.flag {
 .htmx-request.htmx-indicator {
     opacity: 1;
 }
+
+/* ============================================
+   インライン編集（ステップD）
+   ============================================
+   通常モード: <td class="num qty-cell"> … カーソル + 薄いハイライトで「クリックできるよ」を示す
+   編集モード: <td class="num qty-cell-editing"><input ...> … セル内にぴったり収まる input */
+tbody td.qty-cell {
+    cursor: pointer;
+    position: relative;
+}
+tbody td.qty-cell:hover {
+    background: #fff8c4;  /* 薄い黄色でクリック可能をアピール（要発注のホバー赤を上書き） */
+    outline: 1px dashed #c9a227;
+    outline-offset: -2px;
+}
+
+tbody td.qty-cell-editing {
+    padding: 2px 4px;       /* input が収まるよう、セルの内側余白を詰める */
+    background: #fffde7;
+}
+tbody td.qty-cell-editing input[type="number"] {
+    width: 100%;
+    padding: 4px 6px;
+    font-size: 14px;
+    text-align: right;
+    border: 1px solid #1976d2;
+    border-radius: 3px;
+    background: white;
+    /* number input の上下スピンボタンを非表示にする（業務系では邪魔になりがち） */
+    -moz-appearance: textfield;
+    appearance: textfield;   /* ← 標準プロパティ。これを足すと警告が消える */
+}
+tbody td.qty-cell-editing input[type="number"]::-webkit-outer-spin-button,
+tbody td.qty-cell-editing input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+/* ============================================
+   ナビゲーション（ダッシュボード ↔ 在庫一覧）
+   ============================================
+   header h1 のすぐ下に置くタブ風リンク。 */
+.nav-links {
+    display: flex;
+    gap: 4px;
+    margin-top: 4px;
+}
+.nav-link {
+    padding: 8px 16px;
+    font-size: 14px;
+    color: #555;
+    text-decoration: none;
+    border-radius: 4px 4px 0 0;
+    border-bottom: 2px solid transparent;
+}
+.nav-link:hover {
+    background: #f0f0f0;
+    color: #1976d2;
+}
+.nav-link.active {
+    color: #1976d2;
+    font-weight: bold;
+    border-bottom-color: #1976d2;
+    background: #f7fbff;
+}
+
+/* ============================================
+   ダッシュボード本文（スクロール可能領域）
+   ============================================
+   header は body 直下で固定。dashboard-body が残り高さを取ってスクロール。
+   .table-wrapper の dashboard 版。 */
+.dashboard-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 24px;
+    scrollbar-gutter: stable;
+}
+
+/* ============================================
+   KPI カード（5枚横並び）
+   ============================================ */
+.kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 16px;
+    margin-bottom: 24px;
+}
+.kpi-card {
+    background: white;
+    border-radius: 8px;
+    padding: 20px 24px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+    border-left: 4px solid #ccc;
+}
+.kpi-label {
+    font-size: 13px;
+    color: #666;
+    margin-bottom: 8px;
+    font-weight: bold;
+}
+.kpi-value {
+    font-size: 36px;
+    font-weight: bold;
+    color: #222;
+    line-height: 1;
+    margin-bottom: 6px;
+}
+.kpi-unit {
+    font-size: 11px;
+    color: #999;
+}
+
+/* KPI 5色のアクセント（左ボーダーで色分け） */
+.kpi-total      { border-left-color: #1976d2; }  /* 青：基本情報 */
+.kpi-total      .kpi-value { color: #1976d2; }
+.kpi-low        { border-left-color: #d32f2f; }  /* 赤：要注意 */
+.kpi-low        .kpi-value { color: #d32f2f; }
+.kpi-expiring   { border-left-color: #f57c00; }  /* オレンジ：注意 */
+.kpi-expiring   .kpi-value { color: #f57c00; }
+.kpi-categories { border-left-color: #388e3c; }  /* 緑：分類 */
+.kpi-categories .kpi-value { color: #388e3c; }
+.kpi-totalqty { border-left-color: #5d4037; }  /* 棕：総在庫数 */
+.kpi-totalqty .kpi-value { color: #5d4037; }
+
+/* レスポンシブ: 画面が狭くなったら2列、もっと狭ければ1列 */
+@media (max-width: 900px) {
+    .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 480px) {
+    .kpi-grid { grid-template-columns: 1fr; }
+}
+
+/* ============================================
+   グラフカード（Chart.js 用）
+   ============================================ */
+.charts-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+}
+.chart-card {
+    background: white;
+    border-radius: 8px;
+    padding: 16px 20px 20px 20px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+}
+.chart-card h2 {
+    margin: 0 0 12px 0;
+    font-size: 15px;
+    color: #444;
+}
+/* Chart.js は maintainAspectRatio:false のとき、親要素の高さに従う。
+   ここで明示的に高さを与える。 */
+.chart-wrapper {
+    position: relative;
+    height: 280px;
+}
+
+/* レスポンシブ: 狭い画面ではグラフも縦並び */
+@media (max-width: 900px) {
+    .charts-grid { grid-template-columns: 1fr; }
+}

@@ -1,0 +1,108 @@
+{#
+  ダッシュボードページ
+  ============================================
+  トップページ「/」。KPI カード4枚 + Chart.js の棒グラフ2本。
+
+  Python から JS にデータを渡すパターン:
+    <script type="application/json" id="...">{{ ... | tojson }}</script>
+    で「データアイランド」を作り、JS 側で JSON.parse する。
+    こうすると JS 本体（static/dashboard.js）にはテンプレート記法を一切書かずに済む。
+#}
+{% extends "base.html" %}
+
+{% block title %}ダッシュボード - サンプルペッツライフ{% endblock %}
+
+{% block extra_head %}
+    {# Chart.js 本体（CDN）。@4.4.0 で固定してバージョンが変わっても挙動が変わらないようにする #}
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
+{% endblock %}
+
+{% block content %}
+
+    <header>
+        <h1>サンプルペッツライフ ダッシュボード</h1>
+
+        {# ページ切り替えナビゲーション #}
+        <nav class="nav-links">
+            <a href="/" class="nav-link active">ダッシュボード</a>
+            <a href="/inventory" class="nav-link">在庫一覧</a>
+        </nav>
+    </header>
+
+    {# スクロール可能な本文ラッパー（header は body 直下で固定） #}
+    <div class="dashboard-body">
+
+    {#
+      KPI カード4枚
+      ============================================
+      総商品数 / 要発注 / 当月末までに期限 / カテゴリ数
+    #}
+    <section class="kpi-grid">
+        <div class="kpi-card kpi-total">
+            <div class="kpi-label">総商品数</div>
+            <div class="kpi-value">{{ stats.total }}</div>
+            <div class="kpi-unit">商品</div>
+        </div>
+
+        <div class="kpi-card kpi-low">
+            <div class="kpi-label">要発注</div>
+            <div class="kpi-value">{{ stats.low }}</div>
+            <div class="kpi-unit">商品（現在庫数 &lt; 発注点）</div>
+        </div>
+
+        <div class="kpi-card kpi-expiring">
+            <div class="kpi-label">当月末までに期限</div>
+            <div class="kpi-value">{{ stats.expiring }}</div>
+            <div class="kpi-unit">商品（{{ stats.today_iso }} 〜 {{ stats.eom_iso }}）</div>
+        </div>
+
+        <div class="kpi-card kpi-categories">
+            <div class="kpi-label">カテゴリ数</div>
+            <div class="kpi-value">{{ stats.categories }}</div>
+            <div class="kpi-unit">種類</div>
+        </div>
+
+        <div class="kpi-card kpi-totalqty">
+            <div class="kpi-label">総在庫数</div>
+            <div class="kpi-value">{{ stats.total_qty }}</div>
+            <div class="kpi-unit">個</div>
+        </div>
+    </section>
+
+    {#
+      グラフ2本
+      ============================================
+      <canvas> に Chart.js が描画する。サイズは CSS 側（.chart-card）で決める。
+    #}
+    <section class="charts-grid">
+        <div class="chart-card">
+            <h2>カテゴリ別 商品数</h2>
+            <div class="chart-wrapper">
+                <canvas id="categoryChart"></canvas>
+            </div>
+        </div>
+
+        <div class="chart-card">
+            <h2>保管場所別 商品数</h2>
+            <div class="chart-wrapper">
+                <canvas id="locationChart"></canvas>
+            </div>
+        </div>
+    </section>
+
+    </div> {# /.dashboard-body #}
+
+    {#
+      データアイランド: Python から JS へデータを受け渡す入れ物
+      ============================================
+      type="application/json" にすると、ブラウザは中身を JS として実行せず、
+      ただのテキストとして保持する。JS 側で JSON.parse(...textContent) で読む。
+      ここに |tojson を書くのは「中身が JSON だから安全」という設計判断。
+    #}
+    <script id="category-data" type="application/json">{{ category_data | tojson }}</script>
+    <script id="location-data" type="application/json">{{ location_data | tojson }}</script>
+
+    {# 外出ししたダッシュボード用 JS。テンプレート記法は一切なし。 #}
+    <script src="/static/dashboard.js"></script>
+
+{% endblock %}

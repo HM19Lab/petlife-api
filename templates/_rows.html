@@ -4,26 +4,13 @@
   <tbody> の中身だけを出力する。
   初期描画でも HTMX 検索結果でも、同じこのファイルを使い回す。
 
-  ★ ポイント: キーが日本語なのでドット記法ではなく [...] で参照する
-     × {{ s.SKUコード }}    （日本語キーは Python の属性として解釈できない）
-     ◯ {{ s["SKUコード"] }} （辞書アクセスの形なら OK）
+  1行ぶんの <tr> は _row.html に切り出した（インライン編集 PUT のレスポンスでも
+  同じテンプレートを使い回すため）。
 #}
 
 {% if stocks %}
     {% for s in stocks %}
-        {# 要発注の行には class="row-low" を付けて、CSS で赤く強調する #}
-        <tr {% if s["要発注"] %}class="row-low"{% endif %}>
-            <td>{{ s["SKUコード"] }}</td>
-            <td>{{ s["商品名"] }}</td>
-            <td>{{ s["カテゴリ"] }}</td>
-            <td>{{ s["保管場所"] }}</td>
-            <td class="num">{{ s["現在庫数"] }}</td>
-            <td class="num">{{ s["発注点"] }}</td>
-            <td>{{ s["消費期限"] }}</td>
-            <td class="flag">
-                {% if s["要発注"] %}要発注{% else %}-{% endif %}
-            </td>
-        </tr>
+        {% include "_row.html" %}
     {% endfor %}
 {% else %}
     <tr>

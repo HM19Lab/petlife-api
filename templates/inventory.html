@@ -12,6 +12,12 @@
     <header>
         <h1>サンプルペッツライフ 在庫一覧</h1>
 
+        {# ページ切り替えナビゲーション #}
+        <nav class="nav-links">
+            <a href="/" class="nav-link">ダッシュボード</a>
+            <a href="/inventory" class="nav-link active">在庫一覧</a>
+        </nav>
+
         {#
           検索フォーム
           ============================================
@@ -52,7 +58,7 @@
             </div>
 
             <button type="submit" class="btn btn-primary">検索</button>
-            <a href="/" class="btn btn-secondary">クリア</a>
+            <a href="/inventory" class="btn btn-secondary">クリア</a>
 
             <span id="loading" class="htmx-indicator">検索中…</span>
         </form>
