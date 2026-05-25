@@ -1,0 +1,158 @@
+{#
+  新規登録ページ
+  ============================================
+  GET /new で表示される登録フォーム。
+  POST /ui/stock に submit して、成功時は /inventory にリダイレクトされる。
+
+  HTMX は使わず、古典的な POST + リダイレクト（PRG パターン）。
+  業務系の登録画面では今でも王道。
+
+  context:
+    - categories: 既存カテゴリのリスト（datalist の候補）
+    - locations:  既存保管場所のリスト（datalist の候補）
+    - form_data:  入力値の辞書（初回表示は空、エラー時は前回入力を保持）
+    - errors:     エラー文言の辞書（フィールド名キー → メッセージ）
+#}
+{% extends "base.html" %}
+
+{% block title %}新規登録 - サンプルペッツライフ{% endblock %}
+
+{% block content %}
+
+    <header>
+        <h1>商品の新規登録</h1>
+
+        <nav class="nav-links">
+            <a href="/" class="nav-link">ダッシュボード</a>
+            <a href="/inventory" class="nav-link">在庫一覧</a>
+            <a href="/new" class="nav-link active">新規登録</a>
+        </nav>
+    </header>
+
+    <div class="form-body">
+        {#
+          method="post" action="/ui/stock"
+            … フォーム送信先と HTTP メソッド。
+              ブラウザがフォームデータを application/x-www-form-urlencoded で POST する。
+              FastAPI 側は Form(...) で受け取る。
+        #}
+        <form class="new-form" method="post" action="/ui/stock">
+
+            {# SKUコード（必須） #}
+            <div class="field">
+                <label for="sku">SKUコード <span class="required">*</span></label>
+                <input type="text" id="sku" name="sku"
+                       value="{{ form_data.get('sku', '') }}"
+                       placeholder="例: DF-9999"
+                       required>
+                {% if errors.get('sku') %}
+                    <span class="field-error">{{ errors['sku'] }}</span>
+                {% endif %}
+            </div>
+
+            {# 商品名（必須・横2列ぶん） #}
+            <div class="field field-wide">
+                <label for="name">商品名 <span class="required">*</span></label>
+                <input type="text" id="name" name="name"
+                       value="{{ form_data.get('name', '') }}"
+                       placeholder="例: 【犬】プレミアムドッグフード / チキン / 2kg"
+                       required>
+                {% if errors.get('name') %}
+                    <span class="field-error">{{ errors['name'] }}</span>
+                {% endif %}
+            </div>
+
+            {#
+              カテゴリ（datalist で候補を出しつつ自由入力可）
+              ============================================
+              <datalist id="..."> の中身が input のサジェスト候補になる。
+              ユーザーは候補から選んでも、自由に新しい値を入れてもどちらでもOK。
+              ドロップダウンより柔軟、自由入力より親切、というバランスの取れた UI。
+            #}
+            <div class="field">
+                <label for="category">カテゴリ</label>
+                <input type="text" id="category" name="category"
+                       list="categories-list"
+                       value="{{ form_data.get('category', '') }}"
+                       placeholder="既存から選択 or 新規入力">
+                <datalist id="categories-list">
+                    {% for c in categories %}
+                        <option value="{{ c }}">
+                    {% endfor %}
+                </datalist>
+            </div>
+
+            {# 保管場所（datalist） #}
+            <div class="field">
+                <label for="location">保管場所</label>
+                <input type="text" id="location" name="location"
+                       list="locations-list"
+                       value="{{ form_data.get('location', '') }}"
+                       placeholder="既存から選択 or 新規入力">
+                <datalist id="locations-list">
+                    {% for l in locations %}
+                        <option value="{{ l }}">
+                    {% endfor %}
+                </datalist>
+            </div>
+
+            {# 現在庫数（必須・数値） #}
+            <div class="field">
+                <label for="current_qty">現在庫数 <span class="required">*</span></label>
+                <input type="number" id="current_qty" name="current_qty"
+                       value="{{ form_data.get('current_qty', '0') }}"
+                       min="0" required>
+                {% if errors.get('current_qty') %}
+                    <span class="field-error">{{ errors['current_qty'] }}</span>
+                {% endif %}
+            </div>
+
+            {# 発注点（必須・数値） #}
+            <div class="field">
+                <label for="reorder_point">発注点 <span class="required">*</span></label>
+                <input type="number" id="reorder_point" name="reorder_point"
+                       value="{{ form_data.get('reorder_point', '0') }}"
+                       min="0" required>
+                {% if errors.get('reorder_point') %}
+                    <span class="field-error">{{ errors['reorder_point'] }}</span>
+                {% endif %}
+            </div>
+
+            {# 最新入荷日（任意・日付） type="date" でブラウザのカレンダーピッカーが出る #}
+            <div class="field">
+                <label for="last_arrival">最新入荷日</label>
+                <input type="date" id="last_arrival" name="last_arrival"
+                       value="{{ form_data.get('last_arrival', '') }}">
+            </div>
+
+            {# 最新販売日 #}
+            <div class="field">
+                <label for="last_sale">最新販売日</label>
+                <input type="date" id="last_sale" name="last_sale"
+                       value="{{ form_data.get('last_sale', '') }}">
+            </div>
+
+            {# 消費期限 #}
+            <div class="field">
+                <label for="expiry">消費期限</label>
+                <input type="date" id="expiry" name="expiry"
+                       value="{{ form_data.get('expiry', '') }}">
+            </div>
+
+            {# 備考（任意・横2列ぶん） #}
+            <div class="field field-wide">
+                <label for="note">備考</label>
+                <input type="text" id="note" name="note"
+                       value="{{ form_data.get('note', '') }}"
+                       placeholder="任意">
+            </div>
+
+            {# 送信ボタン / キャンセル #}
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">登録</button>
+                <a href="/inventory" class="btn btn-secondary">キャンセル</a>
+            </div>
+        </form>
+    </div>
+
+{% endblock %}

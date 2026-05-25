@@ -95,6 +95,22 @@ header h1 {
 }
 .btn-secondary:hover { background: #f0f0f0; }
 
+/* 削除ボタン（小さめ・赤系。2026-05-25 追加 / htmx-search から流用） */
+.btn-danger-sm {
+    padding: 4px 12px;
+    font-size: 12px;
+    border: 1px solid #d32f2f;
+    background: white;
+    color: #d32f2f;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: bold;
+}
+.btn-danger-sm:hover {
+    background: #d32f2f;
+    color: white;
+}
+
 /* ============================================
    テーブル領域（ここだけスクロール）
    ============================================ */
@@ -142,6 +158,20 @@ tbody td.num { text-align: right; }
 
 /* 要発注フラグ列 */
 tbody td.flag { text-align: center; }
+
+/* 操作列（削除ボタンなど）は中央寄せ */
+tbody td.actions { text-align: center; }
+
+/* ============================================
+   行削除のフェードアウト演出（2026-05-25 追加 / htmx-search から流用）
+   ============================================
+   HTMX の hx-swap="outerHTML swap:300ms" を付けると、swap 中に対象要素に
+   .htmx-swapping クラスが 300ms 付与される。
+   ここで opacity:0 への transition を当てると、消える前にふわっと薄れる演出になる。 */
+tbody tr.htmx-swapping {
+    opacity: 0;
+    transition: opacity 300ms ease-out;
+}
 
 /* ============================================
    要発注の強調表示（ステップC）
@@ -346,4 +376,79 @@ tbody td.qty-cell-editing input[type="number"]::-webkit-inner-spin-button {
 /* レスポンシブ: 狭い画面ではグラフも縦並び */
 @media (max-width: 900px) {
     .charts-grid { grid-template-columns: 1fr; }
+}
+
+/* ============================================
+   新規登録フォーム（2026-05-25 追加 / CRUD の C）
+   ============================================
+   /new ページのフォーム。CSS Grid で2列レイアウト、
+   .field-wide のフィールドは横2列ぶん使う（商品名・備考）。 */
+.form-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 24px;
+    scrollbar-gutter: stable;
+}
+.new-form {
+    background: white;
+    border-radius: 8px;
+    padding: 24px 28px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+    max-width: 900px;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 20px 24px;
+}
+.field {
+    display: flex;
+    flex-direction: column;
+}
+.field-wide {
+    grid-column: span 2;  /* 2列ぶん使うフィールド */
+}
+.field label {
+    font-size: 13px;
+    color: #555;
+    font-weight: bold;
+    margin-bottom: 6px;
+}
+.field input {
+    padding: 8px 10px;
+    font-size: 14px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-family: inherit;
+}
+.field input:focus {
+    outline: 2px solid #1976d2;
+    outline-offset: -1px;
+    border-color: #1976d2;
+}
+
+/* 必須マーク（赤いアスタリスク） */
+.required {
+    color: #d32f2f;
+    margin-left: 2px;
+}
+
+/* インラインのエラーメッセージ（バリデーション失敗時） */
+.field-error {
+    color: #d32f2f;
+    font-size: 12px;
+    margin-top: 4px;
+}
+
+/* 送信ボタンエリア（横2列ぶん） */
+.form-actions {
+    grid-column: span 2;
+    display: flex;
+    gap: 12px;
+    margin-top: 8px;
+}
+
+/* レスポンシブ: 狭い画面では1列に折る */
+@media (max-width: 700px) {
+    .new-form { grid-template-columns: 1fr; }
+    .field-wide,
+    .form-actions { grid-column: span 1; }
 }

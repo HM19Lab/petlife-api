@@ -28,4 +28,22 @@
     <td class="flag">
         {% if s["要発注"] %}要発注{% else %}-{% endif %}
     </td>
+    {#
+      削除ボタン（2026-05-25 追加）
+      ============================================
+      hx-delete  … DELETE メソッドで /ui/stock/{sku} を叩く
+      hx-target  … "closest tr" = 自分から見て一番近い <tr> を対象に
+      hx-swap    … "outerHTML swap:300ms" = <tr> 自体を返り値で置換、300ms フェード
+      hx-confirm … クリック時にブラウザの確認ダイアログを出す
+      サーバーは 空レス を返す → <tr> が空文字に置き換わって行ごと消える
+    #}
+    <td class="actions">
+        <button class="btn-danger-sm"
+                hx-delete="/ui/stock/{{ s['SKUコード'] }}"
+                hx-target="closest tr"
+                hx-swap="outerHTML swap:300ms"
+                hx-confirm="商品 「{{ s['商品名'] }}」 を削除しますか？">
+            削除
+        </button>
+    </td>
 </tr>

@@ -16,6 +16,7 @@
         <nav class="nav-links">
             <a href="/" class="nav-link">ダッシュボード</a>
             <a href="/inventory" class="nav-link active">在庫一覧</a>
+            <a href="/new" class="nav-link">新規登録</a>
         </nav>
 
         {#
@@ -82,6 +83,7 @@
                 <col style="width:  80px"> {# 発注点    #}
                 <col style="width: 130px"> {# 消費期限  #}
                 <col style="width: 100px"> {# 要発注    #}
+                <col style="width:  90px"> {# 操作（削除ボタン） #}
             </colgroup>
             <thead>
                 <tr>
@@ -93,6 +95,7 @@
                     <th class="num">発注点</th>
                     <th>消費期限</th>
                     <th>要発注</th>
+                    <th>操作</th>
                 </tr>
             </thead>
             <tbody id="rows">

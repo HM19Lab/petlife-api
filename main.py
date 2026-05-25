@@ -5,9 +5,12 @@
   [HTML UI（HTMX）]
   GET  /                        → ダッシュボード画面（KPI + Chart.js グラフ）
   GET  /inventory               → 在庫一覧画面（HTML、旧 /）
+  GET  /new                     → 新規登録フォーム画面（HTML）
   GET  /ui/rows                 → 検索結果の部分HTML（HTMX用）
   GET  /ui/stock/{sku}/edit_qty → 編集モードのセル（HTMX用）
   PUT  /ui/stock/{sku}/qty      → 在庫数更新＋行HTML返却（HTMX用）
+  DELETE /ui/stock/{sku}        → 商品削除＋空HTML返却（HTMX用）
+  POST /ui/stock                → 新規登録（HTMLフォーム送信）→ /inventory にリダイレクト
 
   [JSON API]（petlife-streamlit 互換のため変更なし）
   GET  /health        → ヘルスチェック
@@ -25,7 +28,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, Form, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
@@ -116,6 +119,33 @@ def get_stock_or_404(sku_code: str) -> dict:
             detail=f"SKUコード '{sku_code}' が見つかりません",
         )
     return row.fillna("").to_dict(orient="records")[0]
+
+
+def add_to_df(new_row: dict) -> None:
+    """新しい商品を DataFrame に追加する。
+
+    pandas の行追加イディオム:
+      _df = pd.concat([_df, pd.DataFrame([new_row])], ignore_index=True)
+      - pd.DataFrame([new_row]) で「1行だけのDataFrame」を作って
+      - pd.concat で縦に連結
+      - ignore_index=True で 0,1,2,... のインデックスを振り直し
+
+    要発注 フラグも全行ぶん再計算する（更新時と同じ）。
+    再代入なので global _df が必要。
+    """
+    global _df
+    _df = pd.concat([_df, pd.DataFrame([new_row])], ignore_index=True)
+    _df["要発注"] = _df["現在庫数"] < _df["発注点"]
+
+
+def get_categories() -> list[str]:
+    """カテゴリのDISTINCTリスト（ソート済み）。datalist の候補に使う。"""
+    return sorted(set(_df["カテゴリ"].dropna().tolist()))
+
+
+def get_locations() -> list[str]:
+    """保管場所のDISTINCTリスト（ソート済み）。datalist の候補に使う。"""
+    return sorted(set(_df["保管場所"].dropna().tolist()))
 
 
 def filter_stocks(category: str, keyword: str, low_only: bool) -> list[dict]:
@@ -364,3 +394,162 @@ def ui_update_qty(
         name="_row.html",
         context={"s": updated},
     )
+
+
+# =============================================================
+# [HTML UI] 削除用エンドポイント（2026-05-25 / CRUD の D）
+# =============================================================
+# 各行の「削除」ボタンが叩く HTMX 用エンドポイント。
+#
+# HTMX 流の削除パターン（htmx-search で習得済み）:
+#   - クライアントは <tr> 自体を対象にする（hx-target="closest tr", hx-swap="outerHTML"）
+#   - サーバーは「削除後の置き換え内容」を返す
+#   - 空HTML を返せば、<tr> が空文字に置き換わって行ごと消える
+#
+# 既存 JSON 版 /stock/{sku} には DELETE を生やさず、HTMX 用に名前空間を分ける
+# （petlife-streamlit との互換性を守る方針はインライン編集と同じ）。
+
+@app.delete(
+    "/ui/stock/{sku_code}",
+    response_class=HTMLResponse,
+    summary="商品を削除して空HTMLを返す（HTMX用）",
+)
+def ui_delete_stock(sku_code: str):
+    """指定SKUを DataFrame から削除して、空HTMLを返す。
+
+    pandas の行削除イディオム:
+        _df = _df[_df["列"] != 値].reset_index(drop=True)
+      = 「指定値以外」を絞り込んだ DataFrame で _df を上書き。
+        reset_index(drop=True) は抜けたインデックスを 0,1,2,... に振り直す。
+
+    再代入なので global _df が必要（update_qty_in_df と同じ理由）。
+    """
+    global _df
+    if _df[_df["SKUコード"] == sku_code].empty:
+        raise HTTPException(
+            status_code=404,
+            detail=f"SKUコード '{sku_code}' が見つかりません",
+        )
+    _df = _df[_df["SKUコード"] != sku_code].reset_index(drop=True)
+    # 空HTML を返す → <tr> が空文字に置き換わって行が消える
+    return HTMLResponse(content="")
+
+
+# =============================================================
+# [HTML UI] 新規登録用エンドポイント（2026-05-25 / CRUD の C）
+# =============================================================
+# 古典的な「フォーム画面 + POST受け」の2エンドポイント構成。
+# HTMX は使わず、サーバー側で「成功時はリダイレクト」「エラー時はフォーム再描画」する
+# PRG パターン（POST-Redirect-GET）を採用。これは業務系の登録画面の王道。
+
+@app.get("/new", response_class=HTMLResponse, summary="新規登録フォーム（HTML）")
+def new_form(request: Request):
+    """新規登録ページを返す。初回表示は form_data も errors も空。"""
+    return templates.TemplateResponse(
+        request=request,
+        name="new.html",
+        context={
+            "categories": get_categories(),
+            "locations": get_locations(),
+            "form_data": {},
+            "errors": {},
+        },
+    )
+
+
+@app.post("/ui/stock", response_class=HTMLResponse, summary="商品を新規登録（HTMLフォーム送信）")
+def ui_create_stock(
+    request: Request,
+    sku: str = Form(""),
+    name: str = Form(""),
+    category: str = Form(""),
+    location: str = Form(""),
+    current_qty: str = Form("0"),
+    reorder_point: str = Form("0"),
+    last_arrival: str = Form(""),
+    last_sale: str = Form(""),
+    expiry: str = Form(""),
+    note: str = Form(""),
+):
+    """新規登録フォームのPOST受け口。
+
+    成功時: 303 リダイレクトで /inventory に遷移（PRG パターン）。
+    エラー時: 入力値を保持したまま new.html を再描画（400 ステータス）。
+
+    入力値の数値変換は try/except で受ける。日付類はそのまま文字列で保存する
+    （CSV と同じ "YYYY-MM-DD" 形式の文字列のまま）。
+    """
+    # --- バリデーション ---
+    errors: dict[str, str] = {}
+
+    sku_clean = sku.strip()
+    if not sku_clean:
+        errors["sku"] = "SKUコードは必須です"
+    elif not _df[_df["SKUコード"] == sku_clean].empty:
+        errors["sku"] = f"SKUコード '{sku_clean}' は既に登録されています"
+
+    name_clean = name.strip()
+    if not name_clean:
+        errors["name"] = "商品名は必須です"
+
+    # 数値項目: int() で変換 → ValueError なら入力ミス扱い
+    try:
+        qty_int = int(current_qty)
+        if qty_int < 0:
+            errors["current_qty"] = "現在庫数は0以上で指定してください"
+    except ValueError:
+        errors["current_qty"] = "現在庫数は数値で指定してください"
+        qty_int = 0
+
+    try:
+        reorder_int = int(reorder_point)
+        if reorder_int < 0:
+            errors["reorder_point"] = "発注点は0以上で指定してください"
+    except ValueError:
+        errors["reorder_point"] = "発注点は数値で指定してください"
+        reorder_int = 0
+
+    # 入力値を辞書にまとめておく（エラー時の再描画でフォームに再挿入する）
+    form_data = {
+        "sku": sku_clean,
+        "name": name_clean,
+        "category": category.strip(),
+        "location": location.strip(),
+        "current_qty": current_qty.strip(),
+        "reorder_point": reorder_point.strip(),
+        "last_arrival": last_arrival.strip(),
+        "last_sale": last_sale.strip(),
+        "expiry": expiry.strip(),
+        "note": note.strip(),
+    }
+
+    # --- エラーがあればフォームを再描画 ---
+    if errors:
+        return templates.TemplateResponse(
+            request=request,
+            name="new.html",
+            context={
+                "categories": get_categories(),
+                "locations": get_locations(),
+                "form_data": form_data,
+                "errors": errors,
+            },
+            status_code=400,
+        )
+
+    # --- 登録 → /inventory にリダイレクト（PRG パターン） ---
+    add_to_df({
+        "SKUコード": sku_clean,
+        "商品名": name_clean,
+        "カテゴリ": form_data["category"],
+        "保管場所": form_data["location"],
+        "現在庫数": qty_int,
+        "発注点": reorder_int,
+        "最新入荷日": form_data["last_arrival"],
+        "最新販売日": form_data["last_sale"],
+        "消費期限": form_data["expiry"],
+        "備考": form_data["note"],
+    })
+    # 303 See Other: POST のあとは別のメソッド（GET）で見に行ってください、の意味。
+    # ブラウザの再読み込みで二重POSTが起きないようにする HTTP のお作法。
+    return RedirectResponse(url="/inventory", status_code=303)
