@@ -111,6 +111,22 @@ header h1 {
     color: white;
 }
 
+/* 詳細ボタン（小さめ・青系。2026-05-26 追加 / モーダル表示用） */
+.btn-detail-sm {
+    padding: 4px 12px;
+    font-size: 12px;
+    border: 1px solid #1976d2;
+    background: white;
+    color: #1976d2;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: bold;
+}
+.btn-detail-sm:hover {
+    background: #1976d2;
+    color: white;
+}
+
 /* ============================================
    テーブル領域（ここだけスクロール）
    ============================================ */
@@ -161,6 +177,12 @@ tbody td.flag { text-align: center; }
 
 /* 操作列（削除ボタンなど）は中央寄せ */
 tbody td.actions { text-align: center; }
+
+/* 詳細・削除のボタン列（1セル1アクション、中央配置） */
+tbody td.action-cell {
+    text-align: center;
+    padding: 6px 4px;
+}
 
 /* ============================================
    行削除のフェードアウト演出（2026-05-25 追加 / htmx-search から流用）
@@ -451,4 +473,150 @@ tbody td.qty-cell-editing input[type="number"]::-webkit-inner-spin-button {
     .new-form { grid-template-columns: 1fr; }
     .field-wide,
     .form-actions { grid-column: span 1; }
+}
+
+/* ============================================
+   詳細モーダル（2026-05-26 追加 / CRUD の R + U 一括）
+   ============================================
+   構造:
+     .modal-overlay … 画面全体を覆う半透明黒。クリックで閉じる
+     .modal-box     … モーダル本体（中央に浮かぶ白いカード）
+     .modal-header  … タイトル + ×ボタン
+     .modal-grid    … 入力フィールドを 2列グリッドで並べる
+     .modal-footer  … キャンセル + 保存ボタン
+
+   z-index は高めに振る（テーブルの sticky thead が z-index: 1 なので、ここは 1000）。
+*/
+.modal-overlay {
+    position: fixed;
+    inset: 0;                                /* top:0 right:0 bottom:0 left:0 の省略形 */
+    background: rgba(0, 0, 0, 0.45);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    /* ふわっと出すアニメ */
+    animation: modalFadeIn 150ms ease-out;
+}
+@keyframes modalFadeIn {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
+
+.modal-box {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.25);
+    width: 720px;
+    max-width: calc(100vw - 48px);
+    max-height: calc(100vh - 48px);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;                        /* 角丸の中にスクロールバーを収める */
+    animation: modalSlideIn 200ms ease-out;
+}
+@keyframes modalSlideIn {
+    from { transform: translateY(-12px); opacity: 0; }
+    to   { transform: translateY(0); opacity: 1; }
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 14px 20px;
+    border-bottom: 1px solid #e0e0e0;
+    background: #f7fbff;
+}
+.modal-header h2 {
+    margin: 0;
+    font-size: 16px;
+    color: #1976d2;
+}
+.modal-close {
+    background: transparent;
+    border: none;
+    font-size: 24px;
+    line-height: 1;
+    color: #888;
+    cursor: pointer;
+    padding: 0 6px;
+    border-radius: 4px;
+}
+.modal-close:hover {
+    background: #e0e0e0;
+    color: #333;
+}
+
+/* フォーム本体（縦：スクロール可、フッターは固定） */
+.modal-form {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    overflow: hidden;
+}
+.modal-grid {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px 24px;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px 20px;
+}
+.modal-grid .field-wide {
+    grid-column: span 2;
+}
+.modal-grid label {
+    font-size: 12px;
+    color: #555;
+    font-weight: bold;
+    margin-bottom: 4px;
+}
+.modal-grid input,
+.modal-grid select,
+.modal-grid textarea {
+    padding: 8px 10px;
+    font-size: 14px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-family: inherit;
+    width: 100%;
+}
+.modal-grid textarea {
+    resize: vertical;
+    min-height: 60px;
+}
+.modal-grid input:focus,
+.modal-grid select:focus,
+.modal-grid textarea:focus {
+    outline: 2px solid #1976d2;
+    outline-offset: -1px;
+    border-color: #1976d2;
+}
+
+/* 編集不可フィールドの「読むだけ」表示 */
+.modal-readonly {
+    padding: 8px 10px;
+    font-size: 14px;
+    color: #333;
+    background: #f5f5f5;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+.flag-low { color: #d32f2f; font-weight: bold; }
+.flag-ok  { color: #999; }
+
+.modal-footer {
+    padding: 12px 20px;
+    border-top: 1px solid #e0e0e0;
+    background: #fafafa;
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+/* レスポンシブ: 狭い画面では1列に折る */
+@media (max-width: 600px) {
+    .modal-grid { grid-template-columns: 1fr; }
+    .modal-grid .field-wide { grid-column: span 1; }
 }

@@ -1,43 +1,35 @@
 {#
   在庫テーブルの 1行 (<tr>) を出力する部分テンプレート
   ============================================
-  - 初期表示・検索結果（_rows.html）からは {% for s in stocks %}{% include "_row.html" %}{% endfor %} で呼ばれる
-  - インライン編集の PUT /ui/stock/{sku}/qty のレスポンスでも、この 1行 を返して
-    HTMX が 「closest tr の outerHTML」を差し替える
+  - 初期表示・検索結果: _rows.html から include で呼ばれる
+  - インライン編集 PUT /qty: oob なしで行全体差し替え
+  - 詳細モーダル PUT /full: oob=True で hx-swap-oob 属性が付く
 
-  ★ 現在庫数のセルは hx-get で 編集モード（<input>）に差し替わる仕掛け付き。
-     hx-target="this"  … クリックされたセル自身を置き換える
-     hx-swap="outerHTML" … <td> ごと差し替える
-     hx-trigger="click"  … クリックで発火
+  ★ 現在庫数のセルは _qty_cell.html を include（クリック編集 + blur キャンセル対応）
+  ★ 操作列は「詳細」と「削除」の 2つに分離（1セル1アクションで誤クリック防止）
 #}
-<tr {% if s["要発注"] %}class="row-low"{% endif %}>
+<tr id="row-{{ s['SKUコード'] }}"
+    {% if oob %}hx-swap-oob="outerHTML"{% endif %}
+    {% if s["要発注"] %}class="row-low"{% endif %}>
     <td>{{ s["SKUコード"] }}</td>
     <td>{{ s["商品名"] }}</td>
     <td>{{ s["カテゴリ"] }}</td>
     <td>{{ s["保管場所"] }}</td>
-    <td class="num qty-cell"
-        hx-get="/ui/stock/{{ s['SKUコード'] }}/edit_qty"
-        hx-target="this"
-        hx-swap="outerHTML"
-        hx-trigger="click"
-        title="クリックして編集">
-        {{ s["現在庫数"] }}
-    </td>
+    {% include "_qty_cell.html" %}
     <td class="num">{{ s["発注点"] }}</td>
     <td>{{ s["消費期限"] }}</td>
     <td class="flag">
         {% if s["要発注"] %}要発注{% else %}-{% endif %}
     </td>
-    {#
-      削除ボタン（2026-05-25 追加）
-      ============================================
-      hx-delete  … DELETE メソッドで /ui/stock/{sku} を叩く
-      hx-target  … "closest tr" = 自分から見て一番近い <tr> を対象に
-      hx-swap    … "outerHTML swap:300ms" = <tr> 自体を返り値で置換、300ms フェード
-      hx-confirm … クリック時にブラウザの確認ダイアログを出す
-      サーバーは 空レス を返す → <tr> が空文字に置き換わって行ごと消える
-    #}
-    <td class="actions">
+    <td class="action-cell">
+        <button class="btn-detail-sm"
+                hx-get="/ui/stock/{{ s['SKUコード'] }}/detail"
+                hx-target="#modal-container"
+                hx-swap="innerHTML">
+            詳細
+        </button>
+    </td>
+    <td class="action-cell">
         <button class="btn-danger-sm"
                 hx-delete="/ui/stock/{{ s['SKUコード'] }}"
                 hx-target="closest tr"

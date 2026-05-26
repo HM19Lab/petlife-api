@@ -1,0 +1,170 @@
+{#
+  詳細モーダル（部分テンプレート）
+  ============================================
+  GET /ui/stock/{sku}/detail のレスポンス。
+  inventory.html の <div id="modal-container"> に丸ごと差し込まれる。
+
+  構造:
+    <div class="modal-overlay">     ← 背景（クリックで閉じる）
+      <div class="modal-box">       ← モーダル本体（クリックは伝搬しない）
+        <header>...</header>
+        <form hx-put="/ui/stock/{sku}/full" ...>
+          ... 入力フィールド群 ...
+        </form>
+      </div>
+    </div>
+    末尾の script 要素              ← ESC キー で閉じるグローバルリスナー
+
+  ★ HTMX の二段更新の仕掛け:
+     - フォーム送信のレスポンスは「空のメインHTML + OOB swap の <tr>」
+     - メインターゲット = #modal-container（空文字で上書き = モーダル消える）
+     - OOB swap = <tr id="row-{SKU}" hx-swap-oob="outerHTML"> を <tr> 自身に差し替え
+     → モーダルを閉じる と 一覧の該当行を最新化 が 1リクエストで両立する
+#}
+
+{# モーダルを閉じる JS スニペット（オーバーレイの onclick / × ボタン から呼ぶ） #}
+{# モーダル本体クリック時にイベントが背景に伝わらないよう event.stopPropagation() を併用 #}
+
+<div class="modal-overlay" onclick="closePetlifeModal()">
+    <div class="modal-box" onclick="event.stopPropagation()">
+
+        <header class="modal-header">
+            <h2>商品詳細 / 編集</h2>
+            <button type="button"
+                    class="modal-close"
+                    aria-label="閉じる"
+                    onclick="closePetlifeModal()">×</button>
+        </header>
+
+        {#
+          PUT で /ui/stock/{sku}/full に保存
+          hx-target は #modal-container（レスポンスの空HTMLで上書き = モーダルが消える）
+          OOB swap で一覧の <tr> も同時に差し替わる
+        #}
+        <form class="modal-form"
+              hx-put="/ui/stock/{{ s['SKUコード'] }}/full"
+              hx-target="#modal-container"
+              hx-swap="innerHTML"
+              autocomplete="off">
+
+            <div class="modal-grid">
+
+                {# SKUコード（識別子・編集不可） #}
+                <div class="field">
+                    <label>SKUコード</label>
+                    <div class="modal-readonly">{{ s["SKUコード"] }}</div>
+                </div>
+
+                {# 要発注フラグ（自動計算・表示のみ） #}
+                <div class="field">
+                    <label>要発注</label>
+                    <div class="modal-readonly">
+                        {% if s["要発注"] %}
+                            <span class="flag-low">要発注</span>
+                        {% else %}
+                            <span class="flag-ok">-</span>
+                        {% endif %}
+                    </div>
+                </div>
+
+                {# 商品名（横2列ぶん使う） #}
+                <div class="field field-wide">
+                    <label for="m-name">商品名<span class="required">*</span></label>
+                    <input type="text" id="m-name" name="name"
+                           value="{{ s['商品名'] }}"
+                           maxlength="100" required>
+                </div>
+
+                {# カテゴリ（select：既存値からのみ選択） #}
+                <div class="field">
+                    <label for="m-category">カテゴリ</label>
+                    <select id="m-category" name="category">
+                        <option value="" {% if not s['カテゴリ'] %}selected{% endif %}>(未設定)</option>
+                        {% for c in categories %}
+                            <option value="{{ c }}" {% if c == s['カテゴリ'] %}selected{% endif %}>{{ c }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                {# 保管場所（select：既存値からのみ選択） #}
+                <div class="field">
+                    <label for="m-location">保管場所</label>
+                    <select id="m-location" name="location">
+                        <option value="" {% if not s['保管場所'] %}selected{% endif %}>(未設定)</option>
+                        {% for l in locations %}
+                            <option value="{{ l }}" {% if l == s['保管場所'] %}selected{% endif %}>{{ l }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                {# 現在庫数 #}
+                <div class="field">
+                    <label for="m-qty">現在庫数<span class="required">*</span></label>
+                    <input type="number" id="m-qty" name="current_qty"
+                           value="{{ s['現在庫数'] }}" min="0" required>
+                </div>
+
+                {# 発注点 #}
+                <div class="field">
+                    <label for="m-reorder">発注点<span class="required">*</span></label>
+                    <input type="number" id="m-reorder" name="reorder_point"
+                           value="{{ s['発注点'] }}" min="0" required>
+                </div>
+
+                {# 最新入荷日 #}
+                <div class="field">
+                    <label for="m-arrival">最新入荷日</label>
+                    <input type="date" id="m-arrival" name="last_arrival"
+                           value="{{ s['最新入荷日'] }}">
+                </div>
+
+                {# 最新販売日 #}
+                <div class="field">
+                    <label for="m-sale">最新販売日</label>
+                    <input type="date" id="m-sale" name="last_sale"
+                           value="{{ s['最新販売日'] }}">
+                </div>
+
+                {# 消費期限 #}
+                <div class="field">
+                    <label for="m-expiry">消費期限</label>
+                    <input type="date" id="m-expiry" name="expiry"
+                           value="{{ s['消費期限'] }}">
+                </div>
+
+                {# 備考（横2列ぶん使う、textarea） #}
+                <div class="field field-wide">
+                    <label for="m-note">備考</label>
+                    <textarea id="m-note" name="note" rows="3">{{ s['備考'] }}</textarea>
+                </div>
+
+            </div>
+
+            <footer class="modal-footer">
+                <button type="button" class="btn btn-secondary"
+                        onclick="closePetlifeModal()">キャンセル</button>
+                <button type="submit" class="btn btn-primary">保存</button>
+            </footer>
+        </form>
+
+    </div>
+</div>
+
+{#
+  ESC キーで閉じる
+  ============================================
+  document に keydown を1つだけ仕掛けて、Escape を押されたら閉じる。
+  closePetlifeModal() の中でこのリスナー自身も外す（=モーダル非表示時はリスナー残らない）。
+  関数とリスナー登録は毎回上書きしてOK（モーダル再表示時に再定義される）。
+#}
+<script>
+    window.closePetlifeModal = function () {
+        const c = document.getElementById('modal-container');
+        if (c) c.innerHTML = '';
+        document.removeEventListener('keydown', window.__petlifeEscHandler);
+    };
+    window.__petlifeEscHandler = function (e) {
+        if (e.key === 'Escape') window.closePetlifeModal();
+    };
+    document.addEventListener('keydown', window.__petlifeEscHandler);
+</script>

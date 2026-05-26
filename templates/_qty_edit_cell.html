@@ -4,27 +4,26 @@
   GET /ui/stock/{sku}/edit_qty が返す部分HTML。
   通常セル <td>12</td> を <td><input ...></td> に丸ごと差し替える。
 
-  ★ miyuki さんに考えていただきたい部分: <input> の hx-* 属性 4つ
-    1) hx-put       … どこに送る？        ヒント: main.py の PUT /ui/stock/{sku}/qty
-    2) hx-target    … 何を差し替える？    ヒント: 行全体（<tr>）を返してくる
-    3) hx-swap      … どう差し替える？    ヒント: 要素そのものを返り値で置き換える
-    4) hx-trigger   … いつ送信する？      ヒント: Enter押下 と フォーカスが外れた瞬間 の両方
+  挙動:
+    - Enter or 値変更後 blur (change) → PUT で保存 → 行全体差し替え
+    - 値変更なしで blur → GET /qty_cell で通常モードに戻す（誤入力防止）
+
+  data-orig に元の値を持っておき、onblur で「値が変わったかどうか」を判定する。
+  変わっていたら change イベントが既に発火しているので PUT が走る。
+  変わっていなければ「キャンセル」として通常セルを再取得して差し替える。
 
   name="qty" は FastAPI 側の qty: int = Form(...) と一致させる必要があるので固定。
-  autofocus で表示直後にカーソルが入る。
 #}
 <td class="num qty-cell-editing">
     <input type="number"
            name="qty"
            value="{{ s['現在庫数'] }}"
+           data-orig="{{ s['現在庫数'] }}"
            min="0"
            autofocus
-
-           {# ↓↓↓ ここに hx-* 属性を 4つ 追加してください ↓↓↓ #}
-            hx-put="/ui/stock/{{ s['SKUコード'] }}/qty"
-            hx-target="closest tr"
-            hx-swap="outerHTML"
-            hx-trigger="change, keydown[key=='Enter']"
-           {# ↑↑↑ ここまで ↑↑↑ #}
-           >
+           hx-put="/ui/stock/{{ s['SKUコード'] }}/qty"
+           hx-target="closest tr"
+           hx-swap="outerHTML"
+           hx-trigger="change, keydown[key=='Enter']"
+           onblur="if (this.value === this.dataset.orig) { htmx.ajax('GET', '/ui/stock/{{ s['SKUコード'] }}/qty_cell', { target: this.closest('td'), swap: 'outerHTML' }); }">
 </td>

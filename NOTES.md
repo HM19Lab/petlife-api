@@ -38,8 +38,9 @@ petlife-api/
     ├── inventory.html         在庫一覧画面（HTMX）
     ├── new.html               新規登録フォーム
     ├── _rows.html             検索結果（全行を返す部分テンプレート）
-    ├── _row.html              1行ぶんの <tr>（HTMX 単行差し替えで使い回し）
-    └── _qty_edit_cell.html    在庫数の編集モードセル
+    ├── _row.html              1行ぶんの <tr>（HTMX 単行差し替え / OOB swap で使い回し）
+    ├── _qty_edit_cell.html    在庫数の編集モードセル
+    └── _modal.html            詳細モーダル（全フィールド編集フォーム）
 ```
 
 ### モジュール分割の方針
@@ -65,6 +66,8 @@ petlife-api/
 | GET | `/ui/rows` | 検索結果の部分HTML（HTMX 差し替え用） |
 | GET | `/ui/stock/{sku}/edit_qty` | 通常セル → 編集セル差し替え |
 | PUT | `/ui/stock/{sku}/qty` | 在庫数更新 + 行全体 `<tr>` 返却 |
+| GET | `/ui/stock/{sku}/detail` | 詳細モーダルHTML（モーダル本体を返す） |
+| PUT | `/ui/stock/{sku}/full` | 全フィールド更新 + OOB swap で `<tr>` 返却 |
 | POST | `/ui/stock` | 新規登録 → `/inventory` に PRG リダイレクト |
 | DELETE | `/ui/stock/{sku}` | 行削除 + 空HTML返却（フェードアウト） |
 
@@ -125,7 +128,16 @@ PostgreSQL 移行のタイミングで本物の永続化に切り替える予定
 新規登録の完了後は `RedirectResponse(url="/inventory", status_code=303)` でリダイレクト。
 「戻る / 再読込」での二重 POST 送信を防ぐ。
 
-### 7. 部分テンプレートの粒度
+### 7. 詳細モーダルと OOB swap（2026-05-26 追加）
+
+- 一覧の「詳細」ボタン → `GET /ui/stock/{sku}/detail` で `_modal.html` を返し、`#modal-container` の innerHTML に差し込む（モーダル表示）
+- モーダルの「保存」 → `PUT /ui/stock/{sku}/full` で全フィールド更新。レスポンスは `_row.html` を `oob=True` でレンダリング = `<tr id="row-XXX" hx-swap-oob="outerHTML">`
+- HTMX は OOB swap タグをレスポンスから取り出して同 ID の要素を差し替え。残ったメイン応答は空 → `#modal-container` がクリアされて**モーダル自動で閉じる**
+- = 1リクエストで「閉じる + 一覧行を最新化」が両立する設計
+- カテゴリ・保管場所は `<select>` でマスタ既存値からのみ選択（フリー入力での表記揺れを防ぐ業務的判断）
+- 閉じる動作は × ボタン / 背景クリック / ESC キー / キャンセルボタン の4経路。`closePetlifeModal()` を `_modal.html` 内 `<script>` で定義
+
+### 8. 部分テンプレートの粒度
 
 - `_rows.html` = 全行
 - `_row.html` = 1行（HTMX レスポンスでも使い回し）
@@ -133,23 +145,61 @@ PostgreSQL 移行のタイミングで本物の永続化に切り替える予定
 
 ファイル名のアンダースコア + 単数形/複数形で粒度がひと目でわかる。
 
+### ⚠️ Edit/Write ツールの罠（運用ノウハウ）
+長い日本語コメント付きファイルを Edit/Write すると、Anthropic 側ツールのバグで：
+
+- ファイル末尾が UTF-8 途中で切れる
+- ファイル末尾に null バイトが大量に混入する
+
+対処：編集後に bash で確認・補完する。または手動で編集する。
+
+---
+
+## フィールド追加・修正時のチェックリスト
+
+フィールド情報が複数ファイルに散らばっているため、フィールドを追加・修正・削除するときは以下を全部見ること。
+（将来 Pydantic モデル化したら 1箇所で済むようになる予定）
+
+### 必ず見るべき場所
+
+| # | ファイル | 見るところ |
+|---|---|---|
+| 1 | `store.py` | `COLUMNS` / `EDITABLE_COLUMNS` / `load_df()` の型変換 / 派生フィールド計算（要発注など） |
+| 2 | `routers/stock_ui.py` | `ui_create_stock` と `ui_update_full` の Form パラメータ + バリデーション |
+| 3 | `routers/stock_api.py` | JSON API 互換（streamlit が見てる） |
+| 4 | `templates/new.html` | 入力フォーム + 制約（`required` / `maxlength` / `pattern`） |
+| 5 | `templates/_modal.html` | 入力フォーム + 制約 |
+| 6 | `templates/_row.html` | 一覧表示列 |
+| 7 | `templates/inventory.html` | colgroup の列幅と thead のラベル |
+| 8 | `stock.csv` | 列順（1行目の列名と整合） |
+| 9 | `static/style.css` | 必要に応じて |
+
+### フィールド種類別の追加注意点
+
+- **数値型**：`type="number" min="0"` 系の HTML 制約 + サーバ側 `int()` 変換 + 派生フィールドへの影響
+- **選択式**：`store.get_xxx()` 候補取得関数 + 空 option `(未設定)` の有無 + マスタ外の値を許可するか
+- **必須項目**：新規登録とモーダルで揃える（片方だけ必須は不整合）
+
 ---
 
 ## 残課題（次回以降）
 
 | # | タスク | 工数 | メモ |
 |---|---|---|---|
-| ~~1~~ | ~~main.py の APIRouter リファクタリング~~ | ✅ 完了（2026-05-26） | store.py + templating.py + routers/{pages,stock_ui,stock_api}.py に分割 |
-| **2** | **詳細ページ / モーダル**（htmx-search の detail パターン流用） | 0.5ユニット | `routers/stock_ui.py` に追加。次の最優先 |
-| 3 | 業務直結機能（CSV ダウンロード / 消費期限アラート / 入出荷登録） | 1〜2ユニット | 新しい `routers/exports.py` / `routers/transactions.py` として追加。**このタイミングで論理削除への切り替えを再検討** |
-| 4 | README + スクショ更新 | 0.5〜1ユニット | 全機能完成後にまとめて |
-| 5 | （将来）PostgreSQL 移行 + 論理削除への切り替え | — | 業務直結機能と連動 |
-| 6 | （将来）ログイン認証 + pytest による単体テスト | — | PetLife の bcrypt 経験を活用 |
+| ~~1~~ | ~~APIRouter リファクタリング~~ | ✅ 完了（2026-05-26） | store.py + templating.py + routers/{pages,stock_ui,stock_api}.py に分割 |
+| ~~2~~ | ~~詳細モーダル（全フィールド編集）~~ | ✅ 完了（2026-05-26） | _modal.html + GET /detail + PUT /full + OOB swap で一覧と二段更新 |
+| ~~3~~ | ~~新規登録の改善~~ | ✅ 完了（2026-05-26） | autocomplete=off + SKU/商品名 maxlength + pattern + 必須整理 + 備考 textarea |
+| **4** | **カテゴリ・保管場所のマスタ化** | 1〜2ユニット | 別 CSV（categories.csv / locations.csv）でマスタ管理。新規登録も select に統一。マスタ管理画面（CRUD）追加。**次の最優先** |
+| 5 | 業務直結機能（CSV ダウンロード / 消費期限アラート / 入出荷登録） | 1〜2ユニット | 新しい `routers/exports.py` / `routers/transactions.py` として追加。**このタイミングで論理削除への切り替えを再検討** |
+| 6 | README + スクショ更新 | 0.5〜1ユニット | 全機能完成後にまとめて |
+| 7 | （将来）Pydantic モデル化 | 1ユニット | フィールド定義の DRY 化。チェックリスト不要にする。PostgreSQL 移行と一緒にやる |
+| 8 | （将来）PostgreSQL 移行 + 論理削除への切り替え | — | 業務直結機能と連動 |
+| 9 | （将来）ログイン認証 + pytest による単体テスト | — | PetLife の bcrypt 経験を活用 |
 
-### 新規登録の改善案（2026-05-25 でストック）
+### 新規登録の改善案（残り）
 
-- カテゴリは選択式に変える検討（選択ミスを防ぐ）
+2026-05-26 の作業で多くは消化済み。残り：
+
 - 日付バリデーション強化（11111/11/11 等を弾く）
-- ID 入力の規則性チェック（日本語だけはNGなど）
 - 登録ボタンの「登録しますか？」「登録しました」フィードバック
 - 登録後、一覧でその商品にフォーカスがあたる UI

@@ -1,0 +1,15 @@
+{#
+  通常モードの「現在庫数」セル（部分テンプレート）
+  ============================================
+  クリックで編集モードに切り替わる <td>。
+  - 初期表示・検索結果: _row.html から include で呼ばれる
+  - blur キャンセル: GET /ui/stock/{sku}/qty_cell のレスポンスで使われる
+#}
+<td class="num qty-cell"
+    hx-get="/ui/stock/{{ s['SKUコード'] }}/edit_qty"
+    hx-target="this"
+    hx-swap="outerHTML"
+    hx-trigger="click"
+    title="クリックして編集">
+    {{ s["現在庫数"] }}
+</td>

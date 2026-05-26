@@ -89,10 +89,8 @@ def filter_stocks(category: str, keyword: str, low_only: bool) -> list[dict]:
     """
     results = []
     for item in get_all_stocks():
-        # カテゴリ絞り込み
         if category and item["カテゴリ"] != category:
             continue
-        # キーワード絞り込み（SKU/商品名/保管場所のどれかにヒット）
         if keyword:
             target = (
                 str(item["SKUコード"])
@@ -101,7 +99,6 @@ def filter_stocks(category: str, keyword: str, low_only: bool) -> list[dict]:
             )
             if keyword not in target:
                 continue
-        # 要発注のみフィルタ
         if low_only and not item["要発注"]:
             continue
         results.append(item)
@@ -127,6 +124,39 @@ def update_qty_in_df(sku_code: str, qty: int) -> dict:
     _df.loc[_df["SKUコード"] == sku_code, "現在庫数"] = qty
     _df["要発注"] = _df["現在庫数"] < _df["発注点"]
     return _df[_df["SKUコード"] == sku_code].fillna("").to_dict(orient="records")[0]
+
+
+# 詳細モーダルの「全フィールド更新」で書き換えてよい列のホワイトリスト。
+# SKUコードはレコード識別子なので変更不可。要発注は他の列から自動計算。
+EDITABLE_COLUMNS = {
+    "商品名", "カテゴリ", "保管場所",
+    "現在庫数", "発注点",
+    "最新入荷日", "最新販売日", "消費期限", "備考",
+}
+
+
+def update_item_in_df(sku_code: str, fields: dict) -> dict:
+    """指定SKUのレコードを複数フィールド一括で更新し、最新の1件(dict)を返す。
+
+    詳細モーダルの「保存」ボタンから呼ばれる。update_qty_in_df の汎用版。
+
+    - fields のうち EDITABLE_COLUMNS に含まれる列だけを反映する
+      （知らない列名が混ざってきても無視 = 余計な列を増やさない安全弁）
+    - 要発注フラグは現在庫数/発注点から自動再計算する
+    - 該当SKUがなければ 404
+    """
+    global _df
+    if _df[_df["SKUコード"] == sku_code].empty:
+        raise HTTPException(
+            status_code=404,
+            detail=f"SKUコード '{sku_code}' が見つかりません",
+        )
+    mask = _df["SKUコード"] == sku_code
+    for col, value in fields.items():
+        if col in EDITABLE_COLUMNS:
+            _df.loc[mask, col] = value
+    _df["要発注"] = _df["現在庫数"] < _df["発注点"]
+    return _df[mask].fillna("").to_dict(orient="records")[0]
 
 
 def add_to_df(new_row: dict) -> None:
@@ -168,16 +198,8 @@ def delete_from_df(sku_code: str) -> None:
 # =============================================================
 # ダッシュボード用 集計関数
 # =============================================================
-# トップページ「/」のダッシュボードで使う4つのKPIと
-# Chart.js 用のグラフデータ（カテゴリ別/保管場所別）を集計する。
-# pandas の groupby / 日付フィルタ を使って DataFrame から直接計算する。
-
 def _end_of_month(today: date) -> date:
-    """当月末の日付を返す。例: 2026-05-24 → 2026-05-31
-
-    calendar.monthrange(年, 月) は (月の初日の曜日, その月の日数) を返す。
-    [1] で日数だけ取り出して、その日付を組み立てる。
-    """
+    """当月末の日付を返す。例: 2026-05-24 → 2026-05-31"""
     last_day = calendar.monthrange(today.year, today.month)[1]
     return date(today.year, today.month, last_day)
 
@@ -186,15 +208,7 @@ def get_dashboard_stats(today: date | None = None) -> dict:
     """ダッシュボード用KPI 4枚分の数値を返す
 
     返り値の dict のキー:
-      - total:      総商品数
-      - low:        要発注数（現在庫数 < 発注点）
-      - expiring:   当月末までに消費期限が来る商品数
-      - categories: カテゴリ数（DISTINCT）
-      - today_iso:  今日の日付（テンプレート表示用、ISO形式）
-      - eom_iso:    当月末の日付（テンプレート表示用、ISO形式）
-
-    today を引数で渡せるようにしておくと、テストや「過去日付で動作確認」がしやすい。
-    渡さなければ date.today() を使う。
+      - total, low, expiring, categories, total_qty, today_iso, eom_iso
     """
     today = today or date.today()
     eom = _end_of_month(today)
@@ -202,8 +216,6 @@ def get_dashboard_stats(today: date | None = None) -> dict:
     total = len(_df)
     low = int(_df["要発注"].sum())
 
-    # 消費期限を日付型に変換。空文字や不正値は NaT（pandas の Not a Time）になり、
-    # 比較演算で False になるので自然に除外される。
     exp = pd.to_datetime(_df["消費期限"], errors="coerce")
     today_ts = pd.Timestamp(today)
     eom_ts = pd.Timestamp(eom)
@@ -224,20 +236,12 @@ def get_dashboard_stats(today: date | None = None) -> dict:
 
 
 def get_category_counts() -> list[dict]:
-    """カテゴリ別の商品数を集計（Chart.js の棒グラフ用）
-
-    返り値の例: [{"label": "ドライフード", "count": 5}, ...]
-    商品数が多い順に並べる（降順ソート）。
-    """
+    """カテゴリ別の商品数を集計（Chart.js 用、降順）"""
     counts = _df.groupby("カテゴリ").size().sort_values(ascending=False)
     return [{"label": k, "count": int(v)} for k, v in counts.items()]
 
 
 def get_location_counts() -> list[dict]:
-    """保管場所別の商品数を集計（Chart.js の棒グラフ用）
-
-    返り値の例: [{"label": "店舗A棚", "count": 7}, ...]
-    商品数が多い順に並べる（降順ソート）。
-    """
+    """保管場所別の商品数を集計（Chart.js 用、降順）"""
     counts = _df.groupby("保管場所").size().sort_values(ascending=False)
     return [{"label": k, "count": int(v)} for k, v in counts.items()]

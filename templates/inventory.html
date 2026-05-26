@@ -1,8 +1,3 @@
-{#
-  在庫一覧ページ
-  ============================================
-  base.html を継承して、タイトルと中身だけを差し替える。
-#}
 {% extends "base.html" %}
 
 {% block title %}在庫一覧 - サンプルペッツライフ{% endblock %}
@@ -12,22 +7,12 @@
     <header>
         <h1>サンプルペッツライフ 在庫一覧</h1>
 
-        {# ページ切り替えナビゲーション #}
         <nav class="nav-links">
             <a href="/" class="nav-link">ダッシュボード</a>
             <a href="/inventory" class="nav-link active">在庫一覧</a>
             <a href="/new" class="nav-link">新規登録</a>
         </nav>
 
-        {#
-          検索フォーム
-          ============================================
-          hx-get="/ui/rows"  … フォーム内の値をクエリパラメータにして /ui/rows を叩く
-          hx-target="#rows"  … 返ってきたHTMLを <tbody id="rows"> の中身に差し込む
-          hx-swap="innerHTML"… 差し込み方は中身を置き換え（デフォルト）
-          hx-trigger="..."   … 入力中(300msのdebounce付き) / select 変更 / submit ボタンで発火
-          hx-indicator       … リクエスト中だけ「検索中…」を表示する要素のセレクタ
-        #}
         <form class="search-form"
               hx-get="/ui/rows"
               hx-target="#rows"
@@ -52,8 +37,6 @@
             </div>
 
             <div class="form-group-check">
-                {# checkbox は value="true" を明示。チェック時のみクエリに含まれる。
-                   FastAPI 側の `low_only: bool = False` が "true" を True に解釈する。 #}
                 <input type="checkbox" id="low_only" name="low_only" value="true">
                 <label for="low_only">要発注のみ</label>
             </div>
@@ -65,15 +48,8 @@
         </form>
     </header>
 
-    {#
-      テーブル領域
-      ============================================
-      <thead> は固定。<tbody id="rows"> の中身が /ui/rows の結果で差し替わる。
-      初期表示はサーバー側で全件を _rows.html に流し込んで include する。
-    #}
     <div class="table-wrapper">
         <table>
-            {# 列幅を colgroup で固定。table-layout: fixed と組み合わせる #}
             <colgroup>
                 <col style="width:  90px"> {# SKU       #}
                 <col style="width: 320px"> {# 商品名    #}
@@ -83,7 +59,8 @@
                 <col style="width:  80px"> {# 発注点    #}
                 <col style="width: 130px"> {# 消費期限  #}
                 <col style="width: 100px"> {# 要発注    #}
-                <col style="width:  90px"> {# 操作（削除ボタン） #}
+                <col style="width:  80px"> {# 詳細ボタン #}
+                <col style="width:  80px"> {# 削除ボタン #}
             </colgroup>
             <thead>
                 <tr>
@@ -95,14 +72,17 @@
                     <th class="num">発注点</th>
                     <th>消費期限</th>
                     <th>要発注</th>
-                    <th>操作</th>
+                    <th>詳細</th>
+                    <th>削除</th>
                 </tr>
             </thead>
             <tbody id="rows">
-                {# 初期表示: _rows.html を読み込んで全件を出す #}
                 {% include "_rows.html" %}
             </tbody>
         </table>
     </div>
+
+    {# モーダルマウント点（詳細ボタンで /ui/stock/{sku}/detail のHTMLが差し込まれる） #}
+    <div id="modal-container"></div>
 
 {% endblock %}
