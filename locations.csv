@@ -1,0 +1,5 @@
+id,name,sort_order,is_active
+1,バックヤード,1,True
+2,店舗A棚,2,True
+3,店舗B棚,3,True
+4,EC倉庫,4,True

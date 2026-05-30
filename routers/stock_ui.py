@@ -22,6 +22,7 @@ router = APIRouter()
 
 @router.get("/ui/rows", response_class=HTMLResponse)
 def ui_rows(request: Request, category: str = "", keyword: str = "", low_only: bool = False):
+    # category は inventory.html の select から ID 文字列で送られてくる
     results = store.filter_stocks(category, keyword, low_only)
     return templates.TemplateResponse(request=request, name="_rows.html", context={"stocks": results})
 
@@ -55,10 +56,26 @@ def ui_stock_detail(request: Request, sku_code: str):
         name="_modal.html",
         context={
             "s": stock,
-            "categories": store.get_categories(),
-            "locations": store.get_locations(),
+            "categories": store.get_active_categories(),
+            "locations": store.get_active_locations(),
         },
     )
+
+
+def _parse_master_id(value: str, validate_fn, label: str):
+    """フォームから来た ID 文字列を int に変換。空なら None。
+    未知の ID は 400。
+    """
+    s = (value or "").strip()
+    if not s:
+        return None
+    try:
+        i = int(s)
+    except ValueError:
+        raise HTTPException(status_code=400, detail=f"{label}の指定が不正です")
+    if not validate_fn(i):
+        raise HTTPException(status_code=400, detail=f"{label} ID '{i}' はマスタに存在しません")
+    return i
 
 
 @router.put("/ui/stock/{sku_code}/full", response_class=HTMLResponse)
@@ -66,8 +83,8 @@ def ui_update_full(
     request: Request,
     sku_code: str,
     name: str = Form(""),
-    category: str = Form(""),
-    location: str = Form(""),
+    category_id: str = Form(""),
+    location_id: str = Form(""),
     current_qty: int = Form(0),
     reorder_point: int = Form(0),
     last_arrival: str = Form(""),
@@ -82,10 +99,12 @@ def ui_update_full(
         raise HTTPException(status_code=400, detail="qty >= 0")
     if reorder_point < 0:
         raise HTTPException(status_code=400, detail="reorder >= 0")
+    cat_id = _parse_master_id(category_id, store.category_id_exists, "カテゴリ")
+    loc_id = _parse_master_id(location_id, store.location_id_exists, "保管場所")
     updated = store.update_item_in_df(sku_code, {
         "商品名": name_clean,
-        "カテゴリ": category.strip(),
-        "保管場所": location.strip(),
+        "カテゴリID": cat_id,
+        "保管場所ID": loc_id,
         "現在庫数": current_qty,
         "発注点": reorder_point,
         "最新入荷日": last_arrival.strip(),
@@ -107,8 +126,8 @@ def ui_create_stock(
     request: Request,
     sku: str = Form(""),
     name: str = Form(""),
-    category: str = Form(""),
-    location: str = Form(""),
+    category_id: str = Form(""),
+    location_id: str = Form(""),
     current_qty: str = Form("0"),
     reorder_point: str = Form("0"),
     last_arrival: str = Form(""),
@@ -131,7 +150,7 @@ def ui_create_stock(
         errors["name"] = "商品名は必須です"
     elif len(name_clean) > 100:
         errors["name"] = "商品名は100文字以内で入力してください"
-    
+
     current_qty_clean = current_qty.strip()
     if not current_qty_clean:
         errors["current_qty"] = "現在庫数は必須です"
@@ -144,7 +163,7 @@ def ui_create_stock(
         except ValueError:
             errors["current_qty"] = "現在庫数は数値で指定してください"
             qty_int = 0
-        
+
     reorder_clean = reorder_point.strip()
     if not reorder_clean:
         errors["reorder_point"] = "発注点は必須です"
@@ -157,9 +176,31 @@ def ui_create_stock(
         except ValueError:
             errors["reorder_point"] = "発注点は数値で指定してください"
             reorder_int = 0
+
+    # カテゴリ・保管場所の ID をマスタと照合
+    cat_id_clean = category_id.strip()
+    cat_id_int: int | None = None
+    if cat_id_clean:
+        try:
+            cat_id_int = int(cat_id_clean)
+            if not store.category_id_exists(cat_id_int):
+                errors["category_id"] = "選択されたカテゴリはマスタに存在しません"
+        except ValueError:
+            errors["category_id"] = "カテゴリ ID が不正です"
+
+    loc_id_clean = location_id.strip()
+    loc_id_int: int | None = None
+    if loc_id_clean:
+        try:
+            loc_id_int = int(loc_id_clean)
+            if not store.location_id_exists(loc_id_int):
+                errors["location_id"] = "選択された保管場所はマスタに存在しません"
+        except ValueError:
+            errors["location_id"] = "保管場所 ID が不正です"
+
     form_data = {
         "sku": sku_clean, "name": name_clean,
-        "category": category.strip(), "location": location.strip(),
+        "category_id": cat_id_clean, "location_id": loc_id_clean,
         "current_qty": current_qty.strip(), "reorder_point": reorder_point.strip(),
         "last_arrival": last_arrival.strip(), "last_sale": last_sale.strip(),
         "expiry": expiry.strip(), "note": note.strip(),
@@ -168,15 +209,15 @@ def ui_create_stock(
         return templates.TemplateResponse(
             request=request, name="new.html",
             context={
-                "categories": store.get_categories(),
-                "locations": store.get_locations(),
+                "categories": store.get_active_categories(),
+                "locations": store.get_active_locations(),
                 "form_data": form_data, "errors": errors,
             },
             status_code=400,
         )
     store.add_to_df({
         "SKUコード": sku_clean, "商品名": name_clean,
-        "カテゴリ": form_data["category"], "保管場所": form_data["location"],
+        "カテゴリID": cat_id_int, "保管場所ID": loc_id_int,
         "現在庫数": qty_int, "発注点": reorder_int,
         "最新入荷日": form_data["last_arrival"], "最新販売日": form_data["last_sale"],
         "消費期限": form_data["expiry"], "備考": form_data["note"],

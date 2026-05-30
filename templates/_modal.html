@@ -75,24 +75,24 @@
                            maxlength="100" required>
                 </div>
 
-                {# カテゴリ（select：既存値からのみ選択） #}
+                {# カテゴリ（マスタ ID で送る。表示は名前） #}
                 <div class="field">
                     <label for="m-category">カテゴリ</label>
-                    <select id="m-category" name="category">
-                        <option value="" {% if not s['カテゴリ'] %}selected{% endif %}>(未設定)</option>
+                    <select id="m-category" name="category_id">
+                        <option value="" {% if not s['カテゴリID'] %}selected{% endif %}>(未設定)</option>
                         {% for c in categories %}
-                            <option value="{{ c }}" {% if c == s['カテゴリ'] %}selected{% endif %}>{{ c }}</option>
+                            <option value="{{ c.id }}" {% if c.id == s['カテゴリID'] %}selected{% endif %}>{{ c.name }}</option>
                         {% endfor %}
                     </select>
                 </div>
 
-                {# 保管場所（select：既存値からのみ選択） #}
+                {# 保管場所（マスタ ID で送る。表示は名前） #}
                 <div class="field">
                     <label for="m-location">保管場所</label>
-                    <select id="m-location" name="location">
-                        <option value="" {% if not s['保管場所'] %}selected{% endif %}>(未設定)</option>
+                    <select id="m-location" name="location_id">
+                        <option value="" {% if not s['保管場所ID'] %}selected{% endif %}>(未設定)</option>
                         {% for l in locations %}
-                            <option value="{{ l }}" {% if l == s['保管場所'] %}selected{% endif %}>{{ l }}</option>
+                            <option value="{{ l.id }}" {% if l.id == s['保管場所ID'] %}selected{% endif %}>{{ l.name }}</option>
                         {% endfor %}
                     </select>
                 </div>

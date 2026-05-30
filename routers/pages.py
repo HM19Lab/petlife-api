@@ -13,8 +13,8 @@ from fastapi.responses import HTMLResponse
 
 from store import (
     get_all_stocks,
-    get_categories,
-    get_locations,
+    get_active_categories,
+    get_active_locations,
     get_dashboard_stats,
     get_category_counts,
     get_location_counts,
@@ -48,8 +48,8 @@ def dashboard(request: Request):
 def inventory(request: Request):
     """在庫一覧ページ: 検索フォーム + 全件テーブルを含む完全なHTMLを返す（旧 /）"""
     stocks = get_all_stocks()
-    # カテゴリのドロップダウン用リスト（DISTINCT + ソート）
-    categories = sorted(set(item["カテゴリ"] for item in stocks))
+    # フィルタ用カテゴリは「マスタの有効分」（sort_order 順）
+    categories = get_active_categories()
     return templates.TemplateResponse(
         request=request,
         name="inventory.html",
@@ -64,8 +64,8 @@ def new_form(request: Request):
         request=request,
         name="new.html",
         context={
-            "categories": get_categories(),
-            "locations": get_locations(),
+            "categories": get_active_categories(),
+            "locations": get_active_locations(),
             "form_data": {},
             "errors": {},
         },

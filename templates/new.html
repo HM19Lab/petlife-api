@@ -26,6 +26,8 @@
             <a href="/" class="nav-link">ダッシュボード</a>
             <a href="/inventory" class="nav-link">在庫一覧</a>
             <a href="/new" class="nav-link active">新規登録</a>
+            <a href="/masters/categories" class="nav-link">カテゴリマスタ</a>
+            <a href="/masters/locations" class="nav-link">保管場所マスタ</a>
         </nav>
     </header>
 
@@ -67,37 +69,36 @@
             </div>
 
             {#
-              カテゴリ（datalist で候補を出しつつ自由入力可）
+              カテゴリ（マスタからのみ選択。表記揺れ防止のため select に統一）
               ============================================
-              <datalist id="..."> の中身が input のサジェスト候補になる。
-              ユーザーは候補から選んでも、自由に新しい値を入れてもどちらでもOK。
-              ドロップダウンより柔軟、自由入力より親切、というバランスの取れた UI。
+              ・新しいカテゴリは「カテゴリマスタ管理」画面から追加してから使う
+              ・送信値は ID。表示は name。
             #}
             <div class="field">
                 <label for="category">カテゴリ</label>
-                <input type="text" id="category" name="category"
-                       list="categories-list"
-                       value="{{ form_data.get('category', '') }}"
-                       placeholder="既存から選択 or 新規入力">
-                <datalist id="categories-list">
+                <select id="category" name="category_id">
+                    <option value="" {% if not form_data.get('category_id') %}selected{% endif %}>(未設定)</option>
                     {% for c in categories %}
-                        <option value="{{ c }}">
+                        <option value="{{ c.id }}"
+                                {% if form_data.get('category_id') == c.id|string %}selected{% endif %}>
+                            {{ c.name }}
+                        </option>
                     {% endfor %}
-                </datalist>
+                </select>
             </div>
 
-            {# 保管場所（datalist） #}
+            {# 保管場所（同じく select） #}
             <div class="field">
                 <label for="location">保管場所</label>
-                <input type="text" id="location" name="location"
-                       list="locations-list"
-                       value="{{ form_data.get('location', '') }}"
-                       placeholder="既存から選択 or 新規入力">
-                <datalist id="locations-list">
+                <select id="location" name="location_id">
+                    <option value="" {% if not form_data.get('location_id') %}selected{% endif %}>(未設定)</option>
                     {% for l in locations %}
-                        <option value="{{ l }}">
+                        <option value="{{ l.id }}"
+                                {% if form_data.get('location_id') == l.id|string %}selected{% endif %}>
+                            {{ l.name }}
+                        </option>
                     {% endfor %}
-                </datalist>
+                </select>
             </div>
 
             {# 現在庫数（必須・数値） #}

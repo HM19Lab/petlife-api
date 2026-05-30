@@ -10,6 +10,11 @@
     GET  /inventory         → 在庫一覧画面
     GET  /new               → 新規登録フォーム
 
+  [マスタ管理画面]          routers/masters.py
+    GET  /masters/categories → カテゴリマスタ
+    GET  /masters/locations  → 保管場所マスタ
+    POST/PUT/DELETE /ui/masters/{kind}/...
+
   [HTMX 用 /ui/*]           routers/stock_ui.py
     GET    /ui/rows                  → 検索結果の部分HTML
     GET    /ui/stock/{sku}/edit_qty  → 編集モードのセル
@@ -24,7 +29,8 @@
     PUT  /stock/{sku}
 
 【データ】
-  stock.csv をメモリ上の DataFrame で管理（デモ用・再起動で初期値に戻る）
+  stock.csv / categories.csv / locations.csv をメモリ上の DataFrame で管理
+  （デモ用・再起動で初期値に戻る。次フェーズで SQLite 移行予定）
 """
 
 from pathlib import Path
@@ -33,7 +39,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from routers import pages, stock_ui, stock_api
+from routers import pages, stock_ui, stock_api, masters
 
 
 # =============================================================
@@ -49,7 +55,7 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_methods=["GET", "PUT"],
+    allow_methods=["GET", "POST", "PUT", "DELETE"],
     allow_headers=["*"],
 )
 
@@ -67,3 +73,4 @@ app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
 app.include_router(pages.router)
 app.include_router(stock_ui.router)
 app.include_router(stock_api.router)
+app.include_router(masters.router)

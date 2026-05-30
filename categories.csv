@@ -1,0 +1,12 @@
+id,name,sort_order,is_active
+1,ドライフード,1,True
+2,ウェットフード,2,True
+3,スナック・おやつ,3,True
+4,サプリメント,4,True
+5,グルーミング用品,5,True
+6,アクセサリー,6,True
+7,おもちゃ,7,True
+8,アクアリウム用品,8,True
+9,爬虫類用品,9,True
+10,鳥用品,10,True
+11,その他,11,True

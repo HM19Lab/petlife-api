@@ -1,0 +1,35 @@
+{#
+  マスタ1行（通常表示モード）
+  ============================================
+  context:
+    - kind:  "categories" or "locations"
+    - item:  dict（id, name, sort_order, is_active, usage_count）
+    - error: 文字列（任意。削除ブロック時のエラー文言）
+#}
+<tr id="row-{{ kind }}-{{ item.id }}" {% if error %}class="row-error"{% endif %}>
+    <td class="num">{{ item.id }}</td>
+    <td>{{ item.name }}</td>
+    <td class="num">{{ item.sort_order }}</td>
+    <td>
+        {% if item.is_active %}有効{% else %}<span style="color:#aaa;">無効</span>{% endif %}
+    </td>
+    <td class="num">{{ item.usage_count }}</td>
+    <td>
+        <button class="btn-detail-sm"
+                hx-get="/ui/masters/{{ kind }}/{{ item.id }}/edit"
+                hx-target="closest tr"
+                hx-swap="outerHTML">編集</button>
+        <button class="btn-danger-sm"
+                hx-delete="/ui/masters/{{ kind }}/{{ item.id }}"
+                hx-target="closest tr"
+                hx-swap="outerHTML"
+                {% if item.usage_count > 0 %}
+                  hx-confirm="この行は {{ item.usage_count }} 件の商品で使用中です。削除はブロックされます。"
+                {% else %}
+                  hx-confirm="削除しますか？"
+                {% endif %}>削除</button>
+        {% if error %}
+            <span class="field-error" style="display:inline-block; margin-left:8px;">{{ error }}</span>
+        {% endif %}
+    </td>
+</tr>

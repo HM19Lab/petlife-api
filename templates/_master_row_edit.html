@@ -1,0 +1,43 @@
+{#
+  マスタ1行（編集モード）
+  ============================================
+  context:
+    - kind: "categories" or "locations"
+    - item: dict（id, name, sort_order, is_active）
+
+  「保存」は hx-include="closest tr" でこの <tr> 内の input/checkbox を全部送る。
+  キャンセルは通常モード行を取り直して差し替え。
+#}
+<tr id="row-{{ kind }}-{{ item.id }}" class="row-editing">
+    <td class="num">{{ item.id }}</td>
+    <td>
+        <input type="text" name="name"
+               value="{{ item.name }}"
+               maxlength="50" required
+               style="width: 100%;">
+    </td>
+    <td>
+        <input type="number" name="sort_order"
+               value="{{ item.sort_order }}" min="0"
+               style="width: 80px;">
+    </td>
+    <td>
+        <label style="display:inline-flex; align-items:center; gap:4px;">
+            <input type="checkbox" name="is_active"
+                   {% if item.is_active %}checked{% endif %}>
+            <span>有効</span>
+        </label>
+    </td>
+    <td class="num">-</td>
+    <td>
+        <button class="btn btn-primary"
+                hx-put="/ui/masters/{{ kind }}/{{ item.id }}"
+                hx-include="closest tr"
+                hx-target="closest tr"
+                hx-swap="outerHTML">保存</button>
+        <button class="btn btn-secondary"
+                hx-get="/ui/masters/{{ kind }}/{{ item.id }}"
+                hx-target="closest tr"
+                hx-swap="outerHTML">キャンセル</button>
+    </td>
+</tr>
