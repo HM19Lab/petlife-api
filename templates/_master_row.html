@@ -8,17 +8,18 @@
 #}
 <tr id="row-{{ kind }}-{{ item.id }}" {% if error %}class="row-error"{% endif %}>
     <td class="num">{{ item.id }}</td>
-    <td>{{ item.name }}</td>
+    <td class="name-ellipsis" title="{{ item.name }}">{{ item.name }}</td>
     <td class="num">{{ item.sort_order }}</td>
     <td>
         {% if item.is_active %}有効{% else %}<span style="color:#aaa;">無効</span>{% endif %}
     </td>
     <td class="num">{{ item.usage_count }}</td>
-    <td>
+    <td class="action-cell">
         <button class="btn-detail-sm"
                 hx-get="/ui/masters/{{ kind }}/{{ item.id }}/edit"
                 hx-target="closest tr"
-                hx-swap="outerHTML">編集</button>
+                hx-swap="outerHTML"
+                hx-on:click="cancelOtherEdits()">編集</button>
         <button class="btn-danger-sm"
                 hx-delete="/ui/masters/{{ kind }}/{{ item.id }}"
                 hx-target="closest tr"

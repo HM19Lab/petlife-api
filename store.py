@@ -149,12 +149,26 @@ def _next_id(master_df: pd.DataFrame) -> int:
 
 
 def _add_master(kind: str, name: str, sort_order: int | None, is_active: bool) -> dict:
-    """共通 add。kind = 'categories' or 'locations'"""
+    """共通 add。kind = 'categories' or 'locations'
+
+    sort_order の扱い：
+      - None（空欄）: 既存の sort_order 最大 + 1（末尾追加）
+      - 既存と重複: sort_order >= N の行を全部 +1 してから新行を N に（シフト方式）
+    """
     global _categories_df, _locations_df
-    target = _categories_df if kind == "categories" else _locations_df
+    # .copy() で元 DataFrame を直接書き換えないようにする（途中失敗時の安全策）
+    target = (_categories_df if kind == "categories" else _locations_df).copy()
     new_id = _next_id(target)
+
     if sort_order is None:
-        sort_order = new_id
+        # 空欄なら末尾。空マスタなら 1 から
+        sort_order = int(target["sort_order"].max()) + 1 if not target.empty else 1
+    else:
+        # 重複していたら N 以降を 1 ずつ後ろにシフト
+        if (target["sort_order"] == sort_order).any():
+            shift_mask = target["sort_order"] >= sort_order
+            target.loc[shift_mask, "sort_order"] += 1
+
     new_row = {"id": new_id, "name": name, "sort_order": int(sort_order), "is_active": bool(is_active)}
     new_df = pd.concat([target, pd.DataFrame([new_row])], ignore_index=True)
     if kind == "categories":
@@ -165,14 +179,32 @@ def _add_master(kind: str, name: str, sort_order: int | None, is_active: bool) -
 
 
 def _update_master(kind: str, id_: int, name: str, sort_order: int, is_active: bool) -> dict:
-    """共通 update。kind = 'categories' or 'locations'"""
-    target = _categories_df if kind == "categories" else _locations_df
-    if target[target["id"] == id_].empty:
-        raise HTTPException(status_code=404, detail=f"ID '{id_}' が見つかりません")
+    """共通 update。kind = 'categories' or 'locations'
+
+    sort_order の扱い：
+      - 自分以外で sort_order=N と重複していたら、他の行をシフト（+1）
+      - 自分自身の sort_order を N に確定
+    """
+    global _categories_df, _locations_df
+    target = (_categories_df if kind == "categories" else _locations_df).copy()
     mask = target["id"] == id_
+    if not mask.any():
+        raise HTTPException(status_code=404, detail=f"ID '{id_}' が見つかりません")
+
+    other_mask = ~mask  # 自分以外の行
+    # 自分以外で N と重複していたら、N 以降の他の行を +1
+    if ((target["sort_order"] == sort_order) & other_mask).any():
+        shift_mask = (target["sort_order"] >= sort_order) & other_mask
+        target.loc[shift_mask, "sort_order"] += 1
+
     target.loc[mask, "name"] = name
     target.loc[mask, "sort_order"] = int(sort_order)
     target.loc[mask, "is_active"] = bool(is_active)
+
+    if kind == "categories":
+        _categories_df = target
+    else:
+        _locations_df = target
     return target[mask].to_dict(orient="records")[0]
 
 

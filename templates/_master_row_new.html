@@ -1,0 +1,39 @@
+{#
+  マスタ新規追加用の入力行
+  ============================================
+  _master_add_trigger.html から差し替えで現れる、空の入力フォーム行。
+  保存で全行差し替え、キャンセルでトリガー行に戻る。
+
+  context:
+    - kind:  "categories" or "locations"
+    - label: 画面に出す日本語ラベル
+#}
+<tr id="master-new-row" class="row-editing">
+    <td class="num">-</td>
+    <td>
+        <input type="text" name="name" required maxlength="50"
+               placeholder="例: フード類" style="width: 100%;" autofocus>
+    </td>
+    <td>
+        <input type="number" name="sort_order" min="0"
+               placeholder="空欄=末尾" style="width: 80px;">
+    </td>
+    <td>
+        <label style="display:inline-flex; align-items:center; gap:4px;">
+            <input type="checkbox" name="is_active" checked>
+            <span>有効</span>
+        </label>
+    </td>
+    <td class="num">-</td>
+    <td class="action-cell">
+        <button class="btn btn-primary"
+                hx-post="/ui/masters/{{ kind }}"
+                hx-include="closest tr"
+                hx-target="#master-rows"
+                hx-swap="innerHTML">追加</button>
+        <button class="btn btn-secondary"
+                hx-get="/ui/masters/{{ kind }}/add-trigger"
+                hx-target="closest tr"
+                hx-swap="outerHTML">キャンセル</button>
+    </td>
+</tr>

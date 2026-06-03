@@ -29,12 +29,13 @@
         </label>
     </td>
     <td class="num">-</td>
-    <td>
+    <td class="action-cell">
         <button class="btn btn-primary"
                 hx-put="/ui/masters/{{ kind }}/{{ item.id }}"
                 hx-include="closest tr"
-                hx-target="closest tr"
-                hx-swap="outerHTML">保存</button>
+                hx-target="#master-rows"
+                hx-swap="innerHTML"
+                hx-on:htmx:response-error="if (event.detail.xhr.status === 409) alert(event.detail.xhr.responseText)">保存</button>
         <button class="btn btn-secondary"
                 hx-get="/ui/masters/{{ kind }}/{{ item.id }}"
                 hx-target="closest tr"

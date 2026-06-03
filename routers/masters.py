@@ -94,6 +94,32 @@ def _render_master_page(request: Request, kind: str) -> HTMLResponse:
 
 
 # =============================================================
+# HTMX：新規追加トリガー → 入力行への差し替え
+# =============================================================
+# トリガー行 → 入力行（_master_row_new.html）に差し替えるためのエンドポイント。
+# /{id} 系より先に宣言しておく（id: int で型不一致だが、見通しのため固定パスを上に置く）。
+@router.get("/ui/masters/{kind}/new-row", response_class=HTMLResponse, summary="新規入力行を返す")
+def ui_get_master_new_row(request: Request, kind: str):
+    config = _resolve_kind(kind)
+    return templates.TemplateResponse(
+        request=request,
+        name="_master_row_new.html",
+        context={"kind": kind, "label": config["label"]},
+    )
+
+
+# 入力行のキャンセル → トリガー行に戻す
+@router.get("/ui/masters/{kind}/add-trigger", response_class=HTMLResponse, summary="トリガー行に戻す")
+def ui_get_master_add_trigger(request: Request, kind: str):
+    config = _resolve_kind(kind)
+    return templates.TemplateResponse(
+        request=request,
+        name="_master_add_trigger.html",
+        context={"kind": kind, "label": config["label"]},
+    )
+
+
+# =============================================================
 # HTMX：新規追加
 # =============================================================
 @router.post("/ui/masters/{kind}", response_class=HTMLResponse, summary="マスタ新規追加")
@@ -118,17 +144,18 @@ def ui_add_master(
         except ValueError:
             raise HTTPException(status_code=400, detail="表示順は数値で指定してください")
 
-    item = config["add"](
+    config["add"](
         name=name_clean,
         sort_order=sort_order_int,
         is_active=(is_active == "on"),
     )
-    item["usage_count"] = 0
-    # 追加した行をテンプレートで描いて返す（HTMX が tbody に append する）
+    # シフトで既存行の sort_order が変わっている可能性があるため、全行を返して
+    # tbody innerHTML を丸ごと差し替える（HTMX 側で hx-swap="innerHTML"）
+    items = _attach_usage(config["get_all"](), config["count_usage"])
     return templates.TemplateResponse(
         request=request,
-        name="_master_row.html",
-        context={"kind": kind, "item": item},
+        name="_master_rows.html",
+        context={"kind": kind, "label": config["label"], "items": items},
     )
 
 
@@ -190,17 +217,29 @@ def ui_update_master(
     except ValueError:
         raise HTTPException(status_code=400, detail="表示順は数値で指定してください")
 
-    item = config["update"](
+    # 無効化ブロック：現在 active で、新値が inactive、かつ使用中なら拒否
+    new_is_active = (is_active == "on")
+    current = next((x for x in config["get_all"]() if x["id"] == id), None)
+    if current and current["is_active"] and not new_is_active:
+        usage = config["count_usage"](id)
+        if usage > 0:
+            return HTMLResponse(
+                content=f"{usage} 件の商品で使用中のため無効化できません。先に該当商品のカテゴリ/保管場所を変更してください。",
+                status_code=409,
+            )
+
+    config["update"](
         id_=id,
         name=name_clean,
         sort_order=sort_order_int,
-        is_active=(is_active == "on"),
+        is_active=new_is_active,
     )
-    item["usage_count"] = config["count_usage"](id)
+    # 更新でも sort_order シフトの影響が他行に出るため、全行を返して差し替え
+    items = _attach_usage(config["get_all"](), config["count_usage"])
     return templates.TemplateResponse(
         request=request,
-        name="_master_row.html",
-        context={"kind": kind, "item": item},
+        name="_master_rows.html",
+        context={"kind": kind, "label": config["label"], "items": items},
     )
 
 

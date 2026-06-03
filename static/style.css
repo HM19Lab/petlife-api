@@ -183,6 +183,44 @@ tbody td.action-cell {
     text-align: center;
     padding: 6px 4px;
 }
+/* 隣接するボタン同士は 8px 空ける（button + button = 直後の button にだけ効く） */
+tbody td.action-cell button + button {
+    margin-left: 8px;
+}
+
+/* 長文セルの省略表示（…）。tooltip は title 属性で別途付ける。
+   table-layout: fixed + col の width 指定があってはじめて効く */
+tbody td.name-ellipsis {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* マスタ画面「+ 追加」トリガー行のセル。
+   colspan 6 で全列ぶち抜き、中央に小さめのボタンを置く */
+tbody td.trigger-cell {
+    text-align: center;
+    padding: 10px;
+    background: #fafafa;
+}
+
+/* マスタ画面 編集行 / 新規行のテキスト・数値入力の見た目を統一。
+   .field input と同じ枠線・padding・focus 演出を当てる */
+tbody tr.row-editing input[type="text"],
+tbody tr.row-editing input[type="number"] {
+    padding: 6px 8px;
+    font-size: 14px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-family: inherit;
+    background: white;
+}
+tbody tr.row-editing input[type="text"]:focus,
+tbody tr.row-editing input[type="number"]:focus {
+    outline: 2px solid #1976d2;
+    outline-offset: -1px;
+    border-color: #1976d2;
+}
 
 /* ============================================
    行削除のフェードアウト演出（2026-05-25 追加 / htmx-search から流用）
@@ -434,14 +472,23 @@ tbody td.qty-cell-editing input[type="number"]::-webkit-inner-spin-button {
     font-weight: bold;
     margin-bottom: 6px;
 }
-.field input {
+.field input,
+.field select,
+.field textarea {
     padding: 8px 10px;
     font-size: 14px;
     border: 1px solid #ccc;
     border-radius: 4px;
     font-family: inherit;
+    background: white;   /* select はブラウザ既定が灰色がかるので white を明示 */
 }
-.field input:focus {
+.field textarea {
+    resize: vertical;
+    min-height: 60px;
+}
+.field input:focus,
+.field select:focus,
+.field textarea:focus {
     outline: 2px solid #1976d2;
     outline-offset: -1px;
     border-color: #1976d2;

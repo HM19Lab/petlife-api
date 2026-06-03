@@ -1,0 +1,14 @@
+{#
+  マスタ全行（tbody の中身）
+  ============================================
+  add / update 後、tbody#master-rows を innerHTML で丸ごと差し替えるときに使う。
+  sort_order のシフトを画面に反映するため、単行差し替えではなく全行再描画する。
+
+  context:
+    - kind:  "categories" or "locations"
+    - items: list[dict]  全件、usage_count 付き、sort_order 順
+#}
+{% for item in items %}
+    {% include "_master_row.html" %}
+{% endfor %}
+{% include "_master_add_trigger.html" %}

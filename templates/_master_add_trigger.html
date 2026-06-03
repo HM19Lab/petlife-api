@@ -1,0 +1,21 @@
+{#
+  マスタ画面の「+ 追加」トリガー行
+  ============================================
+  tbody の末尾に常設される行。クリックで _master_row_new.html に
+  差し替わって入力モードに入る（「行追加方式」の入口）。
+
+  context:
+    - kind:  "categories" or "locations"
+    - label: 画面に出す日本語ラベル（「カテゴリ」or「保管場所」）
+#}
+<tr id="master-add-trigger" class="row-trigger">
+    <td colspan="6" class="trigger-cell">
+        <button class="btn btn-secondary"
+                hx-get="/ui/masters/{{ kind }}/new-row"
+                hx-target="closest tr"
+                hx-swap="outerHTML"
+                hx-on:click="cancelOtherEdits()">
+            + {{ label }}を追加
+        </button>
+    </td>
+</tr>
