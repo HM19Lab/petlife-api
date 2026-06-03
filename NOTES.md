@@ -137,7 +137,25 @@ PostgreSQL 移行のタイミングで本物の永続化に切り替える予定
 - カテゴリ・保管場所は `<select>` でマスタ既存値からのみ選択（フリー入力での表記揺れを防ぐ業務的判断）
 - 閉じる動作は × ボタン / 背景クリック / ESC キー / キャンセルボタン の4経路。`closePetlifeModal()` を `_modal.html` 内 `<script>` で定義
 
-### 8. 部分テンプレートの粒度
+### 8. SQLite 設計の方針（2026-06-02 追加）
+
+**ファイル**: `db.py`（新設）。`stock.db` は起動時に CSV から自動 seed されるため、リポジトリには含めない（`.gitignore` で `*.db` を除外）。
+
+**列名は英字**: DB 内部は英字（`sku_code` / `name` / `category_id` 等）。`store.py` で dict 変換するときに日本語キー（`SKUコード` / `商品名` 等）に戻すので、テンプレート・API レスポンス・petlife-streamlit との互換性は崩れない。
+
+**要発注フラグは物理列にしない**: `SELECT *, (qty < reorder_point) AS 要発注 FROM stock` のように取得時に計算する。発注点や在庫数を変えただけで連動して値が変わるので、不整合が起きない。pandas 時代の `df["要発注"] = df["現在庫数"] < df["発注点"]` と同じ発想。
+
+**接続管理**: `@contextmanager def get_conn()` で 1リクエスト 1接続。SQLite はファイルロックの仕様上、長期接続より都度接続のほうが安全。`with get_conn() as conn:` で抜けるとき自動 commit、例外時 rollback。
+
+**FK 制約**: `PRAGMA foreign_keys = ON` を接続のたびに発行（SQLite はデフォルト OFF）。
+
+**初回 seed の戦略**: `init_db()` で `CREATE TABLE IF NOT EXISTS` → 各テーブルが空なら CSV から流し込み。2回目以降は何もしない。`stock.csv` の1列目ヘッダーが「商品」（古い名残）になっているので、`DictReader` ではなく列順で読む。
+
+**executescript と手動トランザクションは相性が悪い**: 最初 `isolation_level=None` で手動 `BEGIN` / `COMMIT` する設計にしたら、`executescript()` が内部で COMMIT を発行する仕様にぶつかって "no transaction is active" エラー。Python sqlite3 のデフォルト（DML 実行時に自動 BEGIN）に戻すと素直に動く。
+
+**サンドボックスでは SQLite が動かない罠**: Linux サンドボックス経由で Windows マウントのファイルに SQLite が書き込もうとすると `disk I/O error`（FUSE マウントが SQLite の必要とする `fcntl` ロックをサポートしない）。動作確認は `/tmp` に DB ファイルを置いてやる。本番（Windows ローカル / Railway Linux）では普通に動く。
+
+### 9. 部分テンプレートの粒度
 
 - `_rows.html` = 全行
 - `_row.html` = 1行（HTMX レスポンスでも使い回し）
@@ -159,6 +177,7 @@ PostgreSQL 移行のタイミングで本物の永続化に切り替える予定
 2. 末尾補完するなら **Edit 一択**（bash `>>` 追記は同期ズレで二重化リスク）
 3. Read ツールの表示を「正」として扱う（Windows ファイルシステム経由の方がディスク状態に近い）
 4. bash と Read で行数がズレていたら警戒
+5. **どうしても直らないときは bash の `cat << 'EOF'` でディスクに全文書き直し → cp で上書き**（2026-06-02 追加。Edit を重ねたあと bash 側だけ末尾切れたままになる現象の解決策）
 
 ---
 
@@ -197,15 +216,34 @@ PostgreSQL 移行のタイミングで本物の永続化に切り替える予定
 | ~~2~~ | ~~詳細モーダル（全フィールド編集）~~ | ✅ 完了（2026-05-26） | _modal.html + GET /detail + PUT /full + OOB swap で一覧と二段更新 |
 | ~~3~~ | ~~新規登録の改善~~ | ✅ 完了（2026-05-26） | autocomplete=off + SKU/商品名 maxlength + pattern + 必須整理 + 備考 textarea |
 | ~~4~~ | ~~カテゴリ・保管場所のマスタ化~~（コア完了） | ✅ 完了（2026-05-28） | id, name, sort_order, is_active の4列マスタ。stock.csv は ID 参照に移行。マスタ CRUD 画面（HTMX）追加。**UI 改善は #4.5 に分離**、マスタはメモリ運用（次の SQLite 移行で永続化） |
-| **4.5** | **マスタ画面の UI 改善**（次の最優先） | 1ユニット | 詳細は下記「マスタ画面の UI 改善メモ（2026-05-28）」 |
-| **4.6** | **SQLite 移行**（user 提案） | 2〜3ユニット | Railway 無料枠の制約を回避するため、PostgreSQL ではなく **SQLite に移行**。stock / categories / locations を 1ファイル `stock.db` で管理。SQL 知識はそのまま活用、デプロイ先非依存に。Pydantic モデル化も同時実施 |
+| ~~4.5~~ | ~~マスタ画面の UI 改善~~ | ✅ 完了（2026-06-01） | select 統一・action-cell 中央寄せ・長文省略（…+title）・sort_order 自動シフト方式・行追加方式（末尾「+追加」トリガー）・無効化ブロック（使用中なら 409 + alert）・他編集モード自動クローズ JS。詳細は下記「マスタ画面の UI 改善メモ」参照 |
+| **4.6** | **SQLite 移行**（進行中） | 2〜3ユニット（うち1完了） | Railway 無料枠対策。stock / categories / locations を 1ファイル `stock.db` で管理。**2026-06-02：db.py + 初回 seed 完成**（上記「設計判断 #8」参照）。次ユニットで store.py を SQL ベースに書き換え。Pydantic モデル化はその次のユニット |
 | 5 | 業務直結機能（CSV ダウンロード / 消費期限アラート / 入出荷登録） | 1〜2ユニット | 新しい `routers/exports.py` / `routers/transactions.py` として追加。**このタイミングで論理削除への切り替えを再検討** |
 | 6 | README + スクショ更新 | 0.5〜1ユニット | 全機能完成後にまとめて |
 | 7 | （将来）ログイン認証 + pytest による単体テスト | — | PetLife の bcrypt 経験を活用 |
 
-### マスタ画面の UI 改善メモ（2026-05-28、user フィードバック）
+### マスタ画面の UI 改善メモ（2026-05-28 user フィードバック → 2026-06-01 完了）
 
-明日以降に着手。各項目に方針案（Claude の所感）も付記：
+**実装サマリ（2026-06-01）**：
+- 1, 2, 4：style.css に `.field select/textarea` 統一、`.action-cell` 中央寄せ＋`button+button` で 8px 余白、`.name-ellipsis` で長文…表示
+- 3：`_add_master` / `_update_master` に「sort_order 重複時は N 以降を +1 シフト」ロジック追加。空欄時は max+1（末尾）
+- 5：上の追加フォームを削除し、tbody 末尾に「+ {{ label }}を追加」トリガー行を常設。クリックで `_master_row_new.html` に差し替え、追加成功で `_master_rows.html`（全行）を返す
+- 6：`ui_update_master` に「現在 active → 新値 inactive かつ 使用中なら 409」を追加。保存ボタンに `hx-on:htmx:response-error` で alert 表示
+- 追加対策：複数同時編集を防ぐため、編集/追加トリガー押下時に `cancelOtherEdits()` で他の `.row-editing` をプログラム的にキャンセル
+
+**新規/改修ファイル**：`templates/_master_rows.html`（全行）、`_master_add_trigger.html`、`_master_row_new.html`、`masters.html`（scriptブロック追加）、`_master_row.html` / `_master_row_edit.html`（hx-on 追加）、`routers/masters.py`（new-row / add-trigger エンドポイント追加、ロジックチェック追加）
+
+**学んだこと（学習メモに転記候補）**：
+- 「行間に依存があるならテーブル全行返す」「独立編集なら単行差し替え or OOB swap」の使い分け
+- `hx-on:click` で HTMX リクエストと並行して JS を走らせる小ワザ
+- `hx-on:htmx:response-error` で 4xx を alert に流す軽量エラー UI
+- 「状態を URL とサーバに集中（B案）」と「クライアント JS で繕う（A案）」の設計トレードオフ
+
+---
+
+#### 当時の方針メモ（着手前、user フィードバック）
+
+各項目に方針案（Claude の所感）も付記：
 
 1. **select の見た目が他と統一できていない**
    - 新規登録 (`new.html`) / モーダル (`_modal.html`) の select が他のフォーム要素と比べて素のブラウザデフォルト

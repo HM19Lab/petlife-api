@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# venv
+venv/
+.venv/
+
+# env
+.env
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# SQLite データベース（起動時に CSV から自動生成される）
+*.db
+*.db-journal
+
+# 一時ファイル
+*.bak
+*.tmp
